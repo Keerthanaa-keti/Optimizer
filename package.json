@@ -1,0 +1,24 @@
+{
+  "name": "creditforge",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Claude subscription optimizer & autonomous task executor",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "clean": "rm -rf packages/*/dist apps/*/dist",
+    "creditforge": "node apps/cli/dist/index.js"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "author": "keerthanaaketi",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.19.11",
+    "typescript": "^5.9.3"
+  }
+}

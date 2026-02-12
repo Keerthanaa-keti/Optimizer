@@ -1,0 +1,18 @@
+{
+  "name": "@creditforge/cli",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/index.js",
+  "bin": {
+    "creditforge": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@creditforge/core": "*",
+    "@creditforge/db": "*",
+    "@creditforge/scanner": "*",
+    "@creditforge/executor": "*"
+  }
+}

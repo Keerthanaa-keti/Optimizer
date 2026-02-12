@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.creditforge.scanner</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/homebrew/bin/node</string>
+        <string>/Users/k0v0354/Documents/ClaudeExperiments/optimizer/apps/cli/dist/index.js</string>
+        <string>scan</string>
+    </array>
+    <key>StartInterval</key>
+    <integer>3600</integer>
+    <key>RunAtLoad</key>
+    <false/>
+    <key>StandardOutPath</key>
+    <string>/Users/k0v0354/.creditforge/logs/scanner_stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/k0v0354/.creditforge/logs/scanner_stderr.log</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Users/k0v0354/.local/bin</string>
+        <key>HOME</key>
+        <string>/Users/k0v0354</string>
+    </dict>
+    <key>WorkingDirectory</key>
+    <string>/Users/k0v0354/Documents/ClaudeExperiments/optimizer</string>
+</dict>
+</plist>
