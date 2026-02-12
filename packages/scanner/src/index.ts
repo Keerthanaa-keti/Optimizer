@@ -7,6 +7,10 @@ import { scanClaudeMd } from './scanners/claude-md.js';
 import { scanTodoComments } from './scanners/todo-comments.js';
 import { scanNpmAudit } from './scanners/npm-audit.js';
 import { scanGitAnalyzer } from './scanners/git-analyzer.js';
+import { scanSystemMaintenance } from './scanners/system-maintenance.js';
+import { scanFileOrganization } from './scanners/file-organization.js';
+import { scanDevTooling } from './scanners/dev-tooling.js';
+import { scanProductivity } from './scanners/productivity.js';
 
 export interface ScanResult {
   project: Project;
@@ -140,9 +144,65 @@ function makeProject(projectPath: string, projectName: string): Project {
   };
 }
 
+/**
+ * Scans system-level tasks (not project-specific).
+ * Requires --system flag; never included in default scan.
+ */
+export function scanSystemTasks(): ScanResult {
+  const start = Date.now();
+  const home = process.env.HOME ?? '~';
+  const errors: string[] = [];
+  const allTasks: Task[] = [];
+
+  const scanners = [
+    { name: 'system-maintenance', fn: scanSystemMaintenance },
+    { name: 'file-organization', fn: scanFileOrganization },
+    { name: 'dev-tooling', fn: scanDevTooling },
+    { name: 'productivity', fn: scanProductivity },
+  ];
+
+  for (const scanner of scanners) {
+    try {
+      const tasks = scanner.fn();
+      allTasks.push(...tasks);
+    } catch (err) {
+      errors.push(`${scanner.name}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  // Compute scores
+  for (const task of allTasks) {
+    task.score = computeScore(task);
+  }
+
+  allTasks.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+
+  const project: Project = {
+    path: home,
+    name: 'system',
+    taskCount: allTasks.length,
+    hasClaudeMd: false,
+    hasBugsCodex: false,
+    hasPackageJson: false,
+    isGitRepo: false,
+    lastScannedAt: new Date().toISOString(),
+  };
+
+  return {
+    project,
+    tasks: allTasks,
+    durationMs: Date.now() - start,
+    errors,
+  };
+}
+
 // Re-export individual scanners for direct use
 export { scanPackageJson } from './scanners/package-json.js';
 export { scanClaudeMd } from './scanners/claude-md.js';
 export { scanTodoComments } from './scanners/todo-comments.js';
 export { scanNpmAudit } from './scanners/npm-audit.js';
 export { scanGitAnalyzer } from './scanners/git-analyzer.js';
+export { scanSystemMaintenance } from './scanners/system-maintenance.js';
+export { scanFileOrganization } from './scanners/file-organization.js';
+export { scanDevTooling } from './scanners/dev-tooling.js';
+export { scanProductivity } from './scanners/productivity.js';

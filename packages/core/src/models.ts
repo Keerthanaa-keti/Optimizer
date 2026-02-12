@@ -9,11 +9,15 @@ export type TaskSource =
   | 'tsc-errors'
   | 'missing-tests'
   | 'package-json'
-  | 'git-stale-branch';
+  | 'git-stale-branch'
+  | 'system-maintenance'
+  | 'file-organization'
+  | 'dev-tooling'
+  | 'productivity';
 
 export type TaskStatus = 'queued' | 'scheduled' | 'running' | 'completed' | 'failed' | 'skipped';
 
-export type TaskCategory = 'bug-fix' | 'test' | 'lint' | 'security' | 'refactor' | 'docs' | 'cleanup' | 'build';
+export type TaskCategory = 'bug-fix' | 'test' | 'lint' | 'security' | 'refactor' | 'docs' | 'cleanup' | 'build' | 'system' | 'maintenance' | 'organization' | 'update';
 
 export interface Task {
   id?: number;

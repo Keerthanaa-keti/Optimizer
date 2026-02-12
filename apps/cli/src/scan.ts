@@ -1,4 +1,4 @@
-import { scanAll, type ScanResult, type ScannerOptions } from '@creditforge/scanner';
+import { scanAll, scanSystemTasks, type ScanResult, type ScannerOptions } from '@creditforge/scanner';
 import { getDb, upsertProject, insertTask, clearTasksForProject, getTaskStats } from '@creditforge/db';
 import { computeScore } from '@creditforge/core';
 import { loadConfig } from './config.js';
@@ -7,6 +7,7 @@ export async function runScan(args: string[]): Promise<void> {
   const config = loadConfig();
   const verbose = args.includes('--verbose') || args.includes('-v');
   const quick = args.includes('--quick');
+  const includeSystem = args.includes('--system') || config.scanner.includeSystemTasks;
 
   const scanRoots = config.scanner.scanRoots;
   if (scanRoots.length === 0) {
@@ -43,6 +44,25 @@ export async function runScan(args: string[]): Promise<void> {
 
     totalTasks += result.tasks.length;
     totalErrors += result.errors.length;
+  }
+
+  // System scanners (if --system flag is present)
+  if (includeSystem) {
+    console.log('\nScanning system tasks...');
+    const systemResult = scanSystemTasks();
+    results.push(systemResult);
+
+    printProjectResult(systemResult, verbose);
+
+    const projectId = upsertProject(db, systemResult.project);
+    clearTasksForProject(db, systemResult.project.path);
+    for (const task of systemResult.tasks) {
+      task.score = task.score ?? computeScore(task);
+      insertTask(db, task, projectId);
+    }
+
+    totalTasks += systemResult.tasks.length;
+    totalErrors += systemResult.errors.length;
   }
 
   // Print summary
