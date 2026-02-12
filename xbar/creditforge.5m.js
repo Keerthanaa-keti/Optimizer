@@ -1,8 +1,13 @@
 #!/opt/homebrew/bin/node
 
-// CreditForge xbar Plugin — Enhanced Token Usage Menubar Monitor
+// CreditForge xbar Plugin — Token Usage Menubar Monitor
 // Refreshes every 5 minutes (per filename convention)
 // Self-contained: reads stats-cache.json directly, no monorepo build needed.
+//
+// NOTE: Claude does not expose session %, weekly limits, or reset timers
+// in any local file or CLI command. Those values live server-side only
+// (returned in API response headers during streaming, never persisted).
+// We show what IS available: daily token counts, messages, sessions, trends.
 
 const fs = require('fs');
 const path = require('path');
@@ -10,7 +15,6 @@ const path = require('path');
 const STATS_PATH = path.join(process.env.HOME || '~', '.claude', 'stats-cache.json');
 const OPTIMIZER_DIR = path.join(process.env.HOME || '~', 'Documents', 'ClaudeExperiments', 'optimizer');
 const CLI_PATH = path.join(OPTIMIZER_DIR, 'apps', 'cli', 'dist', 'index.js');
-const DASHBOARD_PORT = 3141;
 
 const TIER_LIMITS = {
   pro:   { monthlyUsd: 20,  dailyTokens: 500000,   label: 'Pro ($20/mo)' },
@@ -20,20 +24,18 @@ const TIER_LIMITS = {
 
 // ─── Helpers ──────────────────────────────────────────────────
 
-function formatTokens(n) {
+function fmt(n) {
   if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
   if (n >= 1000) return `${Math.round(n / 1000)}K`;
   return String(n);
 }
 
-function formatDate(d) {
-  return d.toISOString().slice(0, 10);
-}
+function fmtDate(d) { return d.toISOString().slice(0, 10); }
 
-function daysAgo(n) {
+function ago(n) {
   const d = new Date();
   d.setDate(d.getDate() - n);
-  return formatDate(d);
+  return fmtDate(d);
 }
 
 function getTier() {
@@ -44,26 +46,23 @@ function getTier() {
   for (const p of paths) {
     try {
       const content = fs.readFileSync(p, 'utf-8');
-      const match = content.match(/tier\s*=\s*"(\w+)"/);
-      if (match) return match[1];
+      const m = content.match(/tier\s*=\s*"(\w+)"/);
+      if (m) return m[1];
     } catch { /* ignore */ }
   }
   return 'max5';
 }
 
-function sumDayTokens(entry) {
+function sumDay(entry) {
   if (!entry) return 0;
   return Object.values(entry.tokensByModel).reduce((a, b) => a + b, 0);
 }
 
-function progressBar(pct, width = 10) {
-  const filled = Math.round((pct / 100) * width);
-  const empty = width - filled;
-  return '\u2588'.repeat(filled) + '\u2591'.repeat(empty);
+function bar(pct, w = 10) {
+  const f = Math.round((pct / 100) * w);
+  return '\u2588'.repeat(f) + '\u2591'.repeat(w - f);
 }
 
-// Signal strength bars based on usage percentage
-// More usage = more bars lit up
 function signalBars(pct) {
   if (pct <= 0)  return '\u2581\u2581';
   if (pct < 10)  return '\u2582\u2581';
@@ -74,43 +73,32 @@ function signalBars(pct) {
   return '\u2587\u2588';
 }
 
-// Sparkline from array of values (7 days)
-function sparkline(values) {
-  const chars = ['\u2581', '\u2582', '\u2583', '\u2584', '\u2585', '\u2586', '\u2587', '\u2588'];
-  const max = Math.max(...values, 1);
-  return values.map(v => chars[Math.min(Math.floor((v / max) * 7), 7)]).join('');
-}
-
-function menubarColor(pct) {
+function menuColor(pct) {
   if (pct >= 80) return 'red';
-  if (pct >= 60) return '#ff8c00'; // orange
+  if (pct >= 60) return '#ff8c00';
   if (pct >= 40) return 'yellow';
   return 'green';
 }
 
-function dayLabel(dateStr) {
-  const days = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-  const d = new Date(dateStr + 'T12:00:00');
-  return days[d.getDay()];
+function dayChar(dateStr) {
+  return ['S','M','T','W','T','F','S'][new Date(dateStr + 'T12:00:00').getDay()];
 }
 
-function topNHours(hourCounts, n = 3) {
-  return Object.entries(hourCounts || {})
-    .map(([h, c]) => ({ hour: parseInt(h), count: c }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, n)
-    .map(h => `${String(h.hour).padStart(2, '0')}:00`)
-    .join(', ');
+// xbar uses | as param separator, so display text must not contain |
+// Use \u007c (pipe) only as the separator before params at end of line
+function line(text, params) {
+  if (params) return `${text} | ${params}`;
+  return text;
 }
 
 // ─── Main ─────────────────────────────────────────────────────
 
 function main() {
   if (!fs.existsSync(STATS_PATH)) {
-    console.log('CF \u2581\u2581 -- | color=gray');
+    console.log('CF -- | color=gray');
     console.log('---');
     console.log('Stats not found');
-    console.log('Expected: ~/.claude/stats-cache.json');
+    console.log('Run Claude Code to generate ~/.claude/stats-cache.json');
     return;
   }
 
@@ -125,132 +113,134 @@ function main() {
   }
 
   const tier = getTier();
-  const tierInfo = TIER_LIMITS[tier] || TIER_LIMITS.max5;
-  const today = formatDate(new Date());
+  const ti = TIER_LIMITS[tier] || TIER_LIMITS.max5;
+  const today = fmtDate(new Date());
 
-  // ─── Today's data ─────────────────────────────────────────
-  const todayTokenEntry = (cache.dailyModelTokens || []).find(d => d.date === today);
-  const todayTokens = sumDayTokens(todayTokenEntry);
-  const todayActivity = (cache.dailyActivity || []).find(d => d.date === today);
-  const todayMessages = todayActivity ? todayActivity.messageCount : 0;
-  const todaySessions = todayActivity ? todayActivity.sessionCount : 0;
-  const todayTools = todayActivity ? todayActivity.toolCallCount : 0;
+  // ── Today ───────────────────────────────────────────────────
+  const todayTok = (cache.dailyModelTokens || []).find(d => d.date === today);
+  const todayAct = (cache.dailyActivity || []).find(d => d.date === today);
+  const tTokens = sumDay(todayTok);
+  const tMsgs = todayAct ? todayAct.messageCount : 0;
+  const tSess = todayAct ? todayAct.sessionCount : 0;
+  const tTools = todayAct ? todayAct.toolCallCount : 0;
 
-  const pct = tierInfo.dailyTokens > 0
-    ? Math.round((todayTokens / tierInfo.dailyTokens) * 1000) / 10
+  const pct = ti.dailyTokens > 0
+    ? Math.round((tTokens / ti.dailyTokens) * 1000) / 10
     : 0;
-  const remaining = Math.max(0, tierInfo.dailyTokens - todayTokens);
+  const remaining = Math.max(0, ti.dailyTokens - tTokens);
 
-  // ─── Week data (last 7 days) ──────────────────────────────
-  const weekStartStr = daysAgo(7);
-  const weekEntries = (cache.dailyModelTokens || []).filter(
-    d => d.date >= weekStartStr && d.date <= today
-  );
-  const weekTokens = weekEntries.reduce((s, e) => s + sumDayTokens(e), 0);
-  const daysWithData = weekEntries.length || 1;
-  const avg7d = Math.round(weekTokens / daysWithData);
+  // ── Week (7 days) ───────────────────────────────────────────
+  const wStart = ago(7);
+  const wEntries = (cache.dailyModelTokens || []).filter(d => d.date >= wStart && d.date <= today);
+  const wTokens = wEntries.reduce((s, e) => s + sumDay(e), 0);
+  const wDays = wEntries.length || 1;
+  const wAvg = Math.round(wTokens / wDays);
 
-  // Peak day in last 7
-  let peakDay = { date: today, tokens: 0 };
-  for (const entry of weekEntries) {
-    const t = sumDayTokens(entry);
-    if (t > peakDay.tokens) peakDay = { date: entry.date, tokens: t };
+  let peak = { date: today, tokens: 0 };
+  for (const e of wEntries) {
+    const t = sumDay(e);
+    if (t > peak.tokens) peak = { date: e.date, tokens: t };
   }
 
-  // Trend: compare last 3 days avg vs prior 4 days avg
-  const recentDays = weekEntries.slice(-3);
-  const olderDays = weekEntries.slice(0, -3);
-  const recentAvg = recentDays.length > 0
-    ? recentDays.reduce((s, e) => s + sumDayTokens(e), 0) / recentDays.length
-    : 0;
-  const olderAvg = olderDays.length > 0
-    ? olderDays.reduce((s, e) => s + sumDayTokens(e), 0) / olderDays.length
-    : 0;
-  let trend = 'stable';
-  if (recentAvg > olderAvg * 1.2) trend = '\u2191 increasing';
-  else if (recentAvg < olderAvg * 0.8) trend = '\u2193 decreasing';
+  const recent = wEntries.slice(-3);
+  const older = wEntries.slice(0, -3);
+  const rAvg = recent.length > 0 ? recent.reduce((s, e) => s + sumDay(e), 0) / recent.length : 0;
+  const oAvg = older.length > 0 ? older.reduce((s, e) => s + sumDay(e), 0) / older.length : 0;
+  let trend = '\u2192 stable';
+  if (oAvg > 0 && rAvg > oAvg * 1.2) trend = '\u2191 increasing';
+  else if (oAvg > 0 && rAvg < oAvg * 0.8) trend = '\u2193 decreasing';
 
-  // ─── 7-day sparkline data ─────────────────────────────────
-  const sparkDays = [];
-  const sparkValues = [];
+  // ── Sparkline ───────────────────────────────────────────────
+  const spk = ['\u2581','\u2582','\u2583','\u2584','\u2585','\u2586','\u2587','\u2588'];
+  const sparkVals = [];
+  const sparkLabels = [];
   for (let i = 6; i >= 0; i--) {
-    const dateStr = daysAgo(i);
-    const entry = (cache.dailyModelTokens || []).find(d => d.date === dateStr);
-    sparkDays.push(dayLabel(dateStr));
-    sparkValues.push(sumDayTokens(entry));
+    const ds = ago(i);
+    sparkLabels.push(dayChar(ds));
+    sparkVals.push(sumDay((cache.dailyModelTokens || []).find(d => d.date === ds)));
   }
-  const sparkChars = ['\u2581', '\u2582', '\u2583', '\u2584', '\u2585', '\u2586', '\u2587', '\u2588'];
-  const sparkMax = Math.max(...sparkValues, 1);
-  const sparkLabeled = sparkDays.map((label, i) => {
-    const idx = Math.min(Math.floor((sparkValues[i] / sparkMax) * 7), 7);
-    return label + sparkChars[idx];
-  }).join(' ');
+  const sMax = Math.max(...sparkVals, 1);
+  const sparkStr = sparkLabels.map((l, i) =>
+    l + spk[Math.min(Math.floor((sparkVals[i] / sMax) * 7), 7)]
+  ).join(' ');
 
-  // ─── Active days/week ─────────────────────────────────────
-  const last30Start = daysAgo(30);
-  const last30Activity = (cache.dailyActivity || []).filter(
-    d => d.date >= last30Start && d.date <= today
-  );
-  const activeDaysPerWeek = last30Activity.length > 0
-    ? Math.round((last30Activity.length / 30) * 7 * 10) / 10
-    : 0;
+  // ── Activity ────────────────────────────────────────────────
+  const a30 = (cache.dailyActivity || []).filter(d => d.date >= ago(30) && d.date <= today);
+  const aDays = a30.length > 0 ? Math.round((a30.length / 30) * 7 * 10) / 10 : 0;
 
-  // ─── Model breakdown for today ────────────────────────────
-  const modelLines = todayTokenEntry
-    ? Object.entries(todayTokenEntry.tokensByModel)
+  const topHours = Object.entries(cache.hourCounts || {})
+    .map(([h, c]) => ({ h: parseInt(h), c }))
+    .sort((a, b) => b.c - a.c)
+    .slice(0, 3)
+    .map(x => `${String(x.h).padStart(2, '0')}:00`)
+    .join(', ');
+
+  // ── Models today ────────────────────────────────────────────
+  const models = todayTok
+    ? Object.entries(todayTok.tokensByModel)
         .sort((a, b) => b[1] - a[1])
-        .map(([model, tokens]) => {
-          const shortName = model.replace('claude-', '').replace(/-\d{8}$/, '');
-          return `  ${shortName}: ${formatTokens(tokens)}`;
-        })
+        .map(([m, t]) => `${m.replace('claude-', '').replace(/-\d{8}$/, '')}: ${fmt(t)}`)
     : [];
 
-  // ─── Menubar line ─────────────────────────────────────────
-  const color = menubarColor(pct);
-  const bars = signalBars(pct);
-  console.log(`CF ${bars} ${pct}% | color=${color} font=Menlo size=12`);
+  // ── Last updated ────────────────────────────────────────────
+  const lastUpdated = cache.lastComputedDate || 'unknown';
+
+  // ═══════════════════════════════════════════════════════════
+  // OUTPUT (no | in display text — only before params)
+  // ═══════════════════════════════════════════════════════════
+
+  // Menubar
+  console.log(line(`CF ${signalBars(pct)} ${pct}%`, `color=${menuColor(pct)} font=Menlo size=12`));
   console.log('---');
 
-  // ─── TODAY section ────────────────────────────────────────
-  console.log('TODAY | size=11 color=white');
-  console.log(`  Tokens:    ${formatTokens(todayTokens)} / ${formatTokens(tierInfo.dailyTokens)}         ${progressBar(pct)} ${pct}% | font=Menlo size=12`);
-  console.log(`  Messages:  ${todayMessages} | Sessions: ${todaySessions} | Tools: ${todayTools} | font=Menlo size=12`);
-  console.log(`  Budget:    ~${formatTokens(remaining)} remaining | font=Menlo size=12`);
-  if (modelLines.length > 0) {
-    console.log(`  Model:     ${modelLines[0].trim()} | font=Menlo size=12`);
-    for (let i = 1; i < modelLines.length; i++) {
-      console.log(`           ${modelLines[i].trim()} | font=Menlo size=12`);
+  // Today header
+  console.log(line('\u25C9 TODAY', 'size=12 color=white'));
+  console.log(line(`  Tokens: ${fmt(tTokens)} / ${fmt(ti.dailyTokens)}  ${bar(pct)} ${pct}%`, 'font=Menlo size=12'));
+  console.log(line(`  Messages: ${tMsgs}`, 'font=Menlo size=12'));
+  console.log(line(`  Sessions: ${tSess}`, 'font=Menlo size=12'));
+  console.log(line(`  Tool calls: ${tTools}`, 'font=Menlo size=12'));
+  console.log(line(`  Remaining: ~${fmt(remaining)} est.`, 'font=Menlo size=12'));
+  if (models.length > 0) {
+    for (const m of models) {
+      console.log(line(`  \u2022 ${m}`, 'font=Menlo size=11 color=#8b949e'));
     }
   }
   console.log('---');
 
-  // ─── THIS WEEK section ────────────────────────────────────
-  console.log('THIS WEEK | size=11 color=white');
-  console.log(`  Total:     ${formatTokens(weekTokens)} tokens | font=Menlo size=12`);
-  console.log(`  Avg/day:   ${formatTokens(avg7d)} | Trend: ${trend} | font=Menlo size=12`);
-  console.log(`  Peak:      ${formatTokens(peakDay.tokens)} (${peakDay.date.slice(5)}) | font=Menlo size=12`);
+  // Week
+  console.log(line('\u25C9 THIS WEEK', 'size=12 color=white'));
+  console.log(line(`  Total: ${fmt(wTokens)} tokens`, 'font=Menlo size=12'));
+  console.log(line(`  Avg/day: ${fmt(wAvg)}`, 'font=Menlo size=12'));
+  console.log(line(`  Peak: ${fmt(peak.tokens)} (${peak.date.slice(5)})`, 'font=Menlo size=12'));
+  console.log(line(`  Trend: ${trend}`, 'font=Menlo size=12'));
   console.log('---');
 
-  // ─── 7-DAY SPARKLINE section ──────────────────────────────
-  console.log('7-DAY SPARKLINE | size=11 color=white');
-  console.log(`  ${sparkLabeled} | font=Menlo size=13`);
+  // Sparkline
+  console.log(line('\u25C9 7-DAY SPARKLINE', 'size=12 color=white'));
+  console.log(line(`  ${sparkStr}`, 'font=Menlo size=13'));
   console.log('---');
 
-  // ─── ACTIVITY section ─────────────────────────────────────
-  console.log('ACTIVITY | size=11 color=white');
-  const peakHours = topNHours(cache.hourCounts);
-  console.log(`  Peak hours: ${peakHours} | font=Menlo size=12`);
-  console.log(`  Active: ${activeDaysPerWeek} days/week | font=Menlo size=12`);
+  // Activity
+  console.log(line('\u25C9 ACTIVITY', 'size=12 color=white'));
+  console.log(line(`  Peak hours: ${topHours}`, 'font=Menlo size=12'));
+  console.log(line(`  Active: ${aDays} days/week`, 'font=Menlo size=12'));
   console.log('---');
 
-  // ─── ALL TIME ─────────────────────────────────────────────
-  console.log(`All Time: ${cache.totalSessions || 0} sessions | ${formatTokens(cache.totalMessages || 0)} msgs | since ${(cache.firstSessionDate || '').slice(0, 7)} | size=11 color=#888`);
+  // All time
+  const since = (cache.firstSessionDate || '').slice(0, 10);
+  console.log(line(`All time: ${cache.totalSessions || 0} sessions \u00b7 ${fmt(cache.totalMessages || 0)} msgs \u00b7 since ${since}`, 'size=11 color=#8b949e'));
+  console.log(line(`Data from: ${lastUpdated} (updates on session start)`, 'size=10 color=#6e7681'));
   console.log('---');
 
-  // ─── Actions ──────────────────────────────────────────────
-  console.log(`Open Dashboard | bash=/opt/homebrew/bin/node param1=${CLI_PATH} param2=dashboard param3=--open terminal=false`);
-  console.log('Refresh | refresh=true');
-  console.log(`Plan: ${tierInfo.label} | color=#888`);
+  // Note about limitations
+  console.log(line('\u26A0 Session % and weekly limits are server-side only', 'size=10 color=#6e7681'));
+  console.log(line('  Not available in any local file or CLI', 'size=10 color=#6e7681'));
+  console.log('---');
+
+  // Actions
+  console.log(line('Open Dashboard', `bash=/opt/homebrew/bin/node param1=${CLI_PATH} param2=dashboard param3=--open terminal=false`));
+  console.log(line('Refresh', 'refresh=true'));
+  console.log(line(`Plan: ${ti.label}`, 'color=#8b949e'));
 }
 
 main();
