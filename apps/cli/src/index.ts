@@ -4,6 +4,7 @@ import { runScan } from './scan.js';
 import { runExecute } from './run.js';
 import { runStatus } from './status.js';
 import { runTokens } from './tokens.js';
+import { runOptimize } from './optimize.js';
 
 const USAGE = `
 CreditForge - Claude Subscription Optimizer
@@ -15,6 +16,7 @@ Usage:
   creditforge status                         Show current status
   creditforge status --report                Show morning report
   creditforge tokens [--json]                Show real token usage from Claude
+  creditforge optimize [--dry-run] [--yes]   Scan, plan, approve, and execute
 
 Options:
   --verbose, -v    Show detailed scan output
@@ -22,6 +24,8 @@ Options:
   --dry-run        Preview without executing
   --task <id>      Specify task ID to execute
   --mode night     Enable night mode batch execution
+  --skip-scan      Use existing DB tasks (optimize)
+  --yes            Auto-approve optimization plan
 `.trim();
 
 async function main(): Promise<void> {
@@ -43,6 +47,10 @@ async function main(): Promise<void> {
 
     case 'tokens':
       await runTokens(args.slice(1));
+      break;
+
+    case 'optimize':
+      await runOptimize(args.slice(1));
       break;
 
     case 'help':
