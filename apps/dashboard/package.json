@@ -1,0 +1,14 @@
+{
+  "name": "@creditforge/dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CreditForge web dashboard for token usage visualization",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@creditforge/token-monitor": "*"
+  }
+}

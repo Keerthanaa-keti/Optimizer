@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CreditForge Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-dim: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --yellow: #d29922;
+    --orange: #db6d28;
+    --red: #f85149;
+    --purple: #bc8cff;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif;
+    line-height: 1.5;
+    padding: 24px;
+  }
+
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .header h1 {
+    font-size: 24px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .header h1 .logo {
+    font-size: 28px;
+    color: var(--accent);
+  }
+
+  .header-actions {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+
+  .tier-badge {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--accent);
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: border-color 0.2s;
+  }
+
+  .btn:hover { border-color: var(--accent); }
+
+  .grid-top {
+    display: grid;
+    grid-template-columns: 250px 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+
+  .grid-bottom {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+
+  .card-title {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-dim);
+    margin-bottom: 12px;
+  }
+
+  .gauge-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .gauge-chart {
+    position: relative;
+    width: 180px;
+    height: 180px;
+  }
+
+  .gauge-center {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+  }
+
+  .gauge-pct {
+    font-size: 36px;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .gauge-label {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-top: 4px;
+  }
+
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .stat-row:last-child { border-bottom: none; }
+
+  .stat-label { color: var(--text-dim); font-size: 14px; }
+
+  .stat-value {
+    font-weight: 600;
+    font-size: 14px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .stat-big {
+    font-size: 32px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+
+  .stat-sub {
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+
+  .trend-up { color: var(--orange); }
+  .trend-down { color: var(--green); }
+  .trend-stable { color: var(--text-dim); }
+
+  .chart-full {
+    grid-column: 1 / -1;
+  }
+
+  .chart-container {
+    position: relative;
+    height: 260px;
+  }
+
+  .chart-container-sm {
+    position: relative;
+    height: 220px;
+  }
+
+  .footer {
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 12px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+  }
+
+  .footer span { color: var(--accent); }
+
+  .loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 200px;
+    color: var(--text-dim);
+  }
+
+  .error { color: var(--red); }
+
+  @media (max-width: 900px) {
+    .grid-top { grid-template-columns: 1fr; }
+    .grid-bottom { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1><span class="logo">&#x2692;</span> CreditForge Dashboard</h1>
+  <div class="header-actions">
+    <span class="tier-badge" id="tier-badge">--</span>
+    <button class="btn" onclick="refresh()">Refresh</button>
+  </div>
+</div>
+
+<div id="content">
+  <div class="loading">Loading stats...</div>
+</div>
+
+<div class="footer">
+  <span>CreditForge</span> &middot; Auto-refreshes every 5 minutes &middot; Data from ~/.claude/stats-cache.json
+</div>
+
+<script>
+const MODEL_COLORS = {
+  'claude-opus-4-6': '#bc8cff',
+  'claude-opus-4-5-20251101': '#58a6ff',
+  'claude-sonnet-4-5-20250929': '#3fb950',
+  'claude-haiku-4-5-20251001': '#d29922',
+};
+
+function getModelColor(model) {
+  if (MODEL_COLORS[model]) return MODEL_COLORS[model];
+  const hash = [...model].reduce((h, c) => ((h << 5) - h + c.charCodeAt(0)) | 0, 0);
+  const hue = Math.abs(hash) % 360;
+  return `hsl(${hue}, 60%, 60%)`;
+}
+
+function shortModel(name) {
+  return name.replace('claude-', '').replace(/-\d{8}$/, '');
+}
+
+function fmtTokens(n) {
+  if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+  if (n >= 1e3) return Math.round(n / 1e3) + 'K';
+  return String(n);
+}
+
+function pctColor(pct) {
+  if (pct >= 80) return '#f85149';
+  if (pct >= 60) return '#db6d28';
+  if (pct >= 40) return '#d29922';
+  return '#3fb950';
+}
+
+let charts = {};
+
+function destroyCharts() {
+  for (const c of Object.values(charts)) {
+    if (c && c.destroy) c.destroy();
+  }
+  charts = {};
+}
+
+async function refresh() {
+  try {
+    const res = await fetch('/api/stats');
+    if (!res.ok) throw new Error('API error');
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    render(data);
+  } catch (err) {
+    document.getElementById('content').innerHTML =
+      `<div class="loading error">Failed to load stats: ${err.message}</div>`;
+  }
+}
+
+function render(data) {
+  destroyCharts();
+
+  document.getElementById('tier-badge').textContent = data.tierLabel;
+
+  const content = document.getElementById('content');
+  content.innerHTML = `
+    <div class="grid-top">
+      <div class="card gauge-container">
+        <div class="card-title">Budget Used</div>
+        <div class="gauge-chart">
+          <canvas id="gaugeChart"></canvas>
+          <div class="gauge-center">
+            <div class="gauge-pct" style="color:${pctColor(data.today.pct)}">${data.today.pct}%</div>
+            <div class="gauge-label">of daily budget</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Today</div>
+        <div class="stat-big">${fmtTokens(data.today.tokens)}</div>
+        <div class="stat-sub">tokens used today</div>
+        <div style="margin-top:12px">
+          <div class="stat-row">
+            <span class="stat-label">Messages</span>
+            <span class="stat-value">${data.today.messages.toLocaleString()}</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Sessions</span>
+            <span class="stat-value">${data.today.sessions}</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Tool Calls</span>
+            <span class="stat-value">${data.today.toolCalls.toLocaleString()}</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Budget</span>
+            <span class="stat-value">${fmtTokens(data.dailyBudget)}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">This Week (7 days)</div>
+        <div class="stat-big">${fmtTokens(data.week.tokens)}</div>
+        <div class="stat-sub">tokens this week</div>
+        <div style="margin-top:12px">
+          <div class="stat-row">
+            <span class="stat-label">Avg / day</span>
+            <span class="stat-value">${fmtTokens(data.week.avg)}</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Peak</span>
+            <span class="stat-value">${fmtTokens(data.week.peak.tokens)} (${data.week.peak.date.slice(5)})</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Trend</span>
+            <span class="stat-value ${data.week.trend === 'increasing' ? 'trend-up' : data.week.trend === 'decreasing' ? 'trend-down' : 'trend-stable'}">
+              ${data.week.trend === 'increasing' ? '\u2191' : data.week.trend === 'decreasing' ? '\u2193' : '\u2192'} ${data.week.trend}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card chart-full" style="margin-bottom:16px">
+      <div class="card-title">Daily Usage &mdash; Last 30 Days</div>
+      <div class="chart-container">
+        <canvas id="dailyChart"></canvas>
+      </div>
+    </div>
+
+    <div class="grid-bottom">
+      <div class="card">
+        <div class="card-title">Activity by Hour</div>
+        <div class="chart-container-sm">
+          <canvas id="hourChart"></canvas>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Model Breakdown</div>
+        <div class="chart-container-sm">
+          <canvas id="modelChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="card chart-full">
+      <div class="stat-row">
+        <span class="stat-label">All-Time Sessions</span>
+        <span class="stat-value">${data.allTime.sessions}</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">All-Time Messages</span>
+        <span class="stat-value">${data.allTime.messages.toLocaleString()}</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Tracking Since</span>
+        <span class="stat-value">${data.allTime.firstSession ? data.allTime.firstSession.slice(0, 10) : '--'}</span>
+      </div>
+    </div>
+  `;
+
+  renderGauge(data);
+  renderDailyChart(data);
+  renderHourChart(data);
+  renderModelChart(data);
+}
+
+function renderGauge(data) {
+  const ctx = document.getElementById('gaugeChart').getContext('2d');
+  const used = Math.min(data.today.pct, 100);
+  const remaining = 100 - used;
+
+  charts.gauge = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      datasets: [{
+        data: [used, remaining],
+        backgroundColor: [pctColor(used), '#21262d'],
+        borderWidth: 0,
+        borderRadius: 4,
+      }],
+    },
+    options: {
+      cutout: '78%',
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      animation: { animateRotate: true, duration: 800 },
+    },
+  });
+}
+
+function renderDailyChart(data) {
+  const ctx = document.getElementById('dailyChart').getContext('2d');
+  const labels = data.dailyData.map(d => d.date.slice(5));
+  const models = data.allModels;
+
+  const datasets = models.map(model => ({
+    label: shortModel(model),
+    data: data.dailyData.map(d => (d.byModel[model] || 0)),
+    backgroundColor: getModelColor(model),
+    borderRadius: 3,
+    borderSkipped: false,
+  }));
+
+  charts.daily = new Chart(ctx, {
+    type: 'bar',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { color: '#8b949e', font: { size: 11 } } },
+        tooltip: {
+          callbacks: {
+            label: (item) => `${item.dataset.label}: ${fmtTokens(item.raw)}`,
+          },
+        },
+      },
+      scales: {
+        x: {
+          stacked: true,
+          grid: { color: '#21262d' },
+          ticks: { color: '#8b949e', font: { size: 10 } },
+        },
+        y: {
+          stacked: true,
+          grid: { color: '#21262d' },
+          ticks: {
+            color: '#8b949e',
+            callback: (v) => fmtTokens(v),
+          },
+        },
+      },
+    },
+    plugins: [{
+      id: 'budgetLine',
+      afterDatasetsDraw(chart) {
+        const yScale = chart.scales.y;
+        const budget = data.dailyBudget;
+        if (!budget || budget > yScale.max * 1.5) return;
+        const y = yScale.getPixelForValue(budget);
+        const ctx2 = chart.ctx;
+        ctx2.save();
+        ctx2.setLineDash([6, 4]);
+        ctx2.strokeStyle = '#f8514988';
+        ctx2.lineWidth = 1.5;
+        ctx2.beginPath();
+        ctx2.moveTo(chart.chartArea.left, y);
+        ctx2.lineTo(chart.chartArea.right, y);
+        ctx2.stroke();
+        ctx2.fillStyle = '#f85149';
+        ctx2.font = '10px sans-serif';
+        ctx2.fillText('budget', chart.chartArea.right - 38, y - 4);
+        ctx2.restore();
+      },
+    }],
+  });
+}
+
+function renderHourChart(data) {
+  const ctx = document.getElementById('hourChart').getContext('2d');
+  const hours = Array.from({ length: 24 }, (_, i) => i);
+  const values = hours.map(h => data.hourCounts[String(h)] || 0);
+  const maxVal = Math.max(...values, 1);
+
+  charts.hour = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: hours.map(h => String(h).padStart(2, '0')),
+      datasets: [{
+        data: values,
+        backgroundColor: values.map(v =>
+          v >= maxVal * 0.8 ? '#f85149' :
+          v >= maxVal * 0.5 ? '#d29922' :
+          v > 0 ? '#58a6ff' : '#21262d'
+        ),
+        borderRadius: 2,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            title: (items) => `${items[0].label}:00`,
+            label: (item) => `${item.raw} sessions`,
+          },
+        },
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: { color: '#8b949e', font: { size: 10 } },
+        },
+        y: {
+          grid: { color: '#21262d' },
+          ticks: { color: '#8b949e', stepSize: 1 },
+        },
+      },
+    },
+  });
+}
+
+function renderModelChart(data) {
+  const ctx = document.getElementById('modelChart').getContext('2d');
+  const entries = Object.entries(data.modelTotals).sort((a, b) => b[1] - a[1]);
+
+  if (entries.length === 0) {
+    ctx.fillStyle = '#8b949e';
+    ctx.font = '14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('No model data', ctx.canvas.width / 2, ctx.canvas.height / 2);
+    return;
+  }
+
+  charts.model = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: entries.map(([m]) => shortModel(m)),
+      datasets: [{
+        data: entries.map(([, v]) => v),
+        backgroundColor: entries.map(([m]) => getModelColor(m)),
+        borderWidth: 2,
+        borderColor: '#161b22',
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '55%',
+      plugins: {
+        legend: {
+          position: 'right',
+          labels: {
+            color: '#e6edf3',
+            font: { size: 12 },
+            padding: 12,
+            generateLabels: (chart) => {
+              const dataset = chart.data.datasets[0];
+              const total = dataset.data.reduce((a, b) => a + b, 0);
+              return chart.data.labels.map((label, i) => ({
+                text: `${label} (${fmtTokens(dataset.data[i])})`,
+                fillStyle: dataset.backgroundColor[i],
+                strokeStyle: 'transparent',
+                index: i,
+              }));
+            },
+          },
+        },
+        tooltip: {
+          callbacks: {
+            label: (item) => {
+              const total = item.dataset.data.reduce((a, b) => a + b, 0);
+              const pct = ((item.raw / total) * 100).toFixed(1);
+              return `${item.label}: ${fmtTokens(item.raw)} (${pct}%)`;
+            },
+          },
+        },
+      },
+    },
+  });
+}
+
+// Initial load
+refresh();
+
+// Auto-refresh every 5 minutes
+setInterval(refresh, 5 * 60 * 1000);
+</script>
+</body>
+</html>

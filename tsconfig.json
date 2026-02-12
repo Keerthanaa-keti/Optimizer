@@ -21,6 +21,7 @@
     { "path": "packages/scanner" },
     { "path": "packages/executor" },
     { "path": "packages/token-monitor" },
+    { "path": "apps/dashboard" },
     { "path": "apps/cli" }
   ]
 }

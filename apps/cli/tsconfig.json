@@ -11,6 +11,7 @@
     { "path": "../../packages/db" },
     { "path": "../../packages/scanner" },
     { "path": "../../packages/executor" },
-    { "path": "../../packages/token-monitor" }
+    { "path": "../../packages/token-monitor" },
+    { "path": "../dashboard" }
   ]
 }
