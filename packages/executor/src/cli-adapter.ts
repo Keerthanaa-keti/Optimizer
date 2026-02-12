@@ -17,6 +17,7 @@ export interface CliOptions {
   maxBudgetUsd: number;
   timeoutMs: number;
   claudePath: string;
+  allowedTools: string[];
 }
 
 const DEFAULT_OPTIONS: CliOptions = {
@@ -24,6 +25,7 @@ const DEFAULT_OPTIONS: CliOptions = {
   maxBudgetUsd: 0.50,
   timeoutMs: 5 * 60 * 1000, // 5 minutes per task
   claudePath: 'claude',
+  allowedTools: ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'Bash(git:*)'],
 };
 
 /**
@@ -49,7 +51,13 @@ export class CliAdapter {
       '--model', this.options.model,
       '--output-format', 'json',
       '--max-turns', '25',
+      '--max-budget-usd', String(this.options.maxBudgetUsd),
     ];
+
+    // Restrict tools for autonomous execution safety
+    if (this.options.allowedTools.length > 0) {
+      args.push('--allowedTools', ...this.options.allowedTools);
+    }
 
     // Add project directory context
     args.push('--add-dir', projectPath);
@@ -96,13 +104,20 @@ export class CliAdapter {
 
         try {
           const parsed = JSON.parse(stdout);
+
+          // Claude CLI JSON format: usage.input_tokens/output_tokens
           if (parsed.usage) {
             promptTokens = parsed.usage.input_tokens ?? 0;
             completionTokens = parsed.usage.output_tokens ?? 0;
             totalTokens = promptTokens + completionTokens;
+            // Include cache tokens in the total
+            totalTokens += (parsed.usage.cache_read_input_tokens ?? 0);
+            totalTokens += (parsed.usage.cache_creation_input_tokens ?? 0);
           }
-          if (parsed.cost_usd) {
-            costUsdCents = Math.round(parsed.cost_usd * 100);
+
+          // Claude CLI uses total_cost_usd (not cost_usd)
+          if (parsed.total_cost_usd != null) {
+            costUsdCents = Math.round(parsed.total_cost_usd * 100);
           }
         } catch {
           // Non-JSON output, estimate tokens from length

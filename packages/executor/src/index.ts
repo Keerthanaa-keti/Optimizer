@@ -1,4 +1,4 @@
-import { execSync } from 'node:child_process';
+import { execSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Task, Execution, BatchPlan } from '@creditforge/core';
@@ -51,9 +51,6 @@ export class Executor {
     const branch = this.planner.getBranchName();
     const projectPath = task.projectPath.replace(/^~/, process.env.HOME ?? '');
 
-    // Ensure nightmode branch exists
-    this.ensureBranch(projectPath, branch);
-
     if (this.config.dryRun) {
       return {
         task,
@@ -61,6 +58,9 @@ export class Executor {
         success: true,
       };
     }
+
+    // Ensure nightmode branch exists (only for real execution)
+    this.ensureBranch(projectPath, branch);
 
     try {
       const result = await this.cli.execute(task);
@@ -186,19 +186,14 @@ export class Executor {
         stdio: 'pipe',
       });
     } catch {
-      // Branch doesn't exist, create from current HEAD
+      // Branch doesn't exist — create without switching (safe with dirty working tree)
       try {
-        execSync(`git checkout -b ${branch}`, {
-          cwd: projectPath,
-          stdio: 'pipe',
-        });
-        // Go back to previous branch
-        execSync('git checkout -', {
+        execSync(`git branch ${branch}`, {
           cwd: projectPath,
           stdio: 'pipe',
         });
       } catch {
-        // May already be on the branch or other git issue
+        // Branch may already exist or other git issue
       }
     }
   }
@@ -230,11 +225,17 @@ export class Executor {
         return undefined;
       }
 
-      // Commit
-      execSync(`git commit -m "${message}\n\nCo-Authored-By: CreditForge <noreply@creditforge.dev>"`, {
+      // Commit — use spawnSync to avoid shell injection from task titles
+      const commitMsg = `${message}\n\nCo-Authored-By: CreditForge <noreply@creditforge.dev>`;
+      const commitResult = spawnSync('git', ['commit', '-m', commitMsg], {
         cwd: projectPath,
         stdio: 'pipe',
       });
+
+      if (commitResult.status !== 0) {
+        execSync('git checkout -', { cwd: projectPath, stdio: 'pipe' });
+        return undefined;
+      }
 
       // Get commit hash
       const hash = execSync('git rev-parse HEAD', {
