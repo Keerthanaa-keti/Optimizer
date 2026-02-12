@@ -15,11 +15,15 @@ export interface CreditForgeConfig {
     excludePatterns: string[];
     skipNpmAudit: boolean;
     maxTodosPerProject: number;
+    includeSystemTasks: boolean;
   };
   credits: {
     windowResetHour: number;
     hardStopMinutesBefore: number;
     estimatedBalanceUsdCents: number;
+  };
+  subscription: {
+    tier: 'pro' | 'max5' | 'max20';
   };
 }
 
@@ -37,11 +41,15 @@ const DEFAULT_CONFIG: CreditForgeConfig = {
     excludePatterns: ['**/node_modules/**', '**/GitCode/**'],
     skipNpmAudit: false,
     maxTodosPerProject: 50,
+    includeSystemTasks: false,
   },
   credits: {
     windowResetHour: 0,
     hardStopMinutesBefore: 30,
     estimatedBalanceUsdCents: 5000, // $50 default estimate
+  },
+  subscription: {
+    tier: 'max5',
   },
 };
 
@@ -119,6 +127,9 @@ function parseToml(content: string): CreditForgeConfig {
         break;
       case 'credits':
         setNested(config.credits, camelCase(key), value);
+        break;
+      case 'subscription':
+        setNested(config.subscription, camelCase(key), value);
         break;
     }
   }

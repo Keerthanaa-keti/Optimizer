@@ -20,6 +20,7 @@
     { "path": "packages/db" },
     { "path": "packages/scanner" },
     { "path": "packages/executor" },
+    { "path": "packages/token-monitor" },
     { "path": "apps/cli" }
   ]
 }

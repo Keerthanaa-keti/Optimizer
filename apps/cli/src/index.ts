@@ -3,6 +3,7 @@
 import { runScan } from './scan.js';
 import { runExecute } from './run.js';
 import { runStatus } from './status.js';
+import { runTokens } from './tokens.js';
 
 const USAGE = `
 CreditForge - Claude Subscription Optimizer
@@ -13,6 +14,7 @@ Usage:
   creditforge run --mode night [--dry-run]   Run night mode batch execution
   creditforge status                         Show current status
   creditforge status --report                Show morning report
+  creditforge tokens [--json]                Show real token usage from Claude
 
 Options:
   --verbose, -v    Show detailed scan output
@@ -37,6 +39,10 @@ async function main(): Promise<void> {
 
     case 'status':
       await runStatus(args.slice(1));
+      break;
+
+    case 'tokens':
+      await runTokens(args.slice(1));
       break;
 
     case 'help':

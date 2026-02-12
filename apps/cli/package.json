@@ -13,6 +13,7 @@
     "@creditforge/core": "*",
     "@creditforge/db": "*",
     "@creditforge/scanner": "*",
-    "@creditforge/executor": "*"
+    "@creditforge/executor": "*",
+    "@creditforge/token-monitor": "*"
   }
 }
