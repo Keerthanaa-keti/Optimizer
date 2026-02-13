@@ -315,6 +315,7 @@ function main() {
   out('Refresh', 'refresh=true');
   out('---');
   out(`${ti.label}`, 'size=11 color=#999');
+  out('Quit CreditForge', 'bash=/usr/bin/osascript param1=-e param2=tell application "xbar" to quit terminal=false');
 }
 
 main();
