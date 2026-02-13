@@ -1,22 +1,32 @@
 #!/opt/homebrew/bin/node
 
 // CreditForge — Claude Token Monitor (xbar plugin)
-// Matches Claude's Usage page layout: Current Session + Weekly Limits
+// Matches Claude's Usage page: Current Session + Weekly Limits
+// Uses cost-weighted token formula to match Claude's percentages
 
 const fs = require('fs');
 const path = require('path');
 
 const CLAUDE_DIR = path.join(process.env.HOME, '.claude');
-const STATS = path.join(CLAUDE_DIR, 'stats-cache.json');
 const OPT = path.join(process.env.HOME, 'Documents', 'ClaudeExperiments', 'optimizer');
 const CLI = path.join(OPT, 'apps', 'cli', 'dist', 'index.js');
 
 const SESSION_WINDOW_HOURS = 5;
 
+// Cost per million tokens by model (USD) — used for rate limit calculation
+const MODEL_PRICING = {
+  'claude-opus-4-6':          { input: 15,   output: 75,  cacheWrite: 18.75, cacheRead: 1.50 },
+  'claude-opus-4-5-20250620': { input: 15,   output: 75,  cacheWrite: 18.75, cacheRead: 1.50 },
+  'claude-sonnet-4-5-20250929': { input: 3,  output: 15,  cacheWrite: 3.75,  cacheRead: 0.30 },
+  'claude-haiku-4-5-20251001':  { input: 0.8, output: 4,  cacheWrite: 1.0,   cacheRead: 0.08 },
+};
+const DEFAULT_PRICING = { input: 15, output: 75, cacheWrite: 18.75, cacheRead: 1.50 };
+
+// Calibrated budgets (internal compute cost, not subscription price)
 const TIERS = {
-  pro:   { session: 500000,  weekly: 3500000,   label: 'Pro $20/mo' },
-  max5:  { session: 2500000, weekly: 17500000,  label: 'Max 5\u00d7 $100/mo' },
-  max20: { session: 10000000, weekly: 70000000, label: 'Max 20\u00d7 $200/mo' },
+  pro:   { sessionBudget: 21,   weeklyBudget: 325,  label: 'Pro $20/mo' },
+  max5:  { sessionBudget: 104,  weeklyBudget: 1620, label: 'Max 5\u00d7 $100/mo' },
+  max20: { sessionBudget: 416,  weeklyBudget: 6480, label: 'Max 20\u00d7 $200/mo' },
 };
 
 // ─── JSONL Scanner ────────────────────────────────────
@@ -24,12 +34,10 @@ const TIERS = {
 function scanTokens() {
   const now = Date.now();
   const sessionCutoff = new Date(now - SESSION_WINDOW_HOURS * 3600000).toISOString();
-  const today = new Date().toISOString().slice(0, 10);
   const weekAgo = new Date(now - 7 * 86400000).toISOString();
   const projectsDir = path.join(CLAUDE_DIR, 'projects');
   const threeMinAgo = now - 3 * 60 * 1000;
 
-  // Collect jsonl files modified in the last 7 days
   const jsonlFiles = [];
   try {
     const projects = fs.readdirSync(projectsDir);
@@ -47,7 +55,6 @@ function scanTokens() {
             }
           } catch {}
         }
-        // Subagents
         const subDir = path.join(full, 'subagents');
         try {
           const subs = fs.readdirSync(subDir);
@@ -68,8 +75,7 @@ function scanTokens() {
     return empty();
   }
 
-  // Parse: collect last usage per message.id (streaming dedup)
-  // key -> { model, input, output, timestamp }
+  // Parse: last usage per message.id (streaming dedup)
   const byMsgId = {};
   const activeFiles = new Set();
 
@@ -102,75 +108,68 @@ function scanTokens() {
       if (!timestamp || !model || model === '<synthetic>' || !usage) continue;
 
       const key = msgId || `${file.path}:${timestamp}`;
-      // Last write wins (cumulative output_tokens in streaming)
       byMsgId[key] = {
-        model,
+        model, timestamp,
         input: usage.input_tokens || 0,
         output: usage.output_tokens || 0,
-        timestamp,
+        cacheCreate: usage.cache_creation_input_tokens || 0,
+        cacheRead: usage.cache_read_input_tokens || 0,
       };
       if (isActive) activeFiles.add(file.path);
     }
   }
 
-  // Aggregate into session (last 5h) and weekly buckets
-  let sessionTokens = 0, weeklyTokens = 0, todayTokens = 0;
-  let sessionMsgs = 0, todayMsgs = 0;
+  // Cost function: estimate USD spend for a set of tokens
+  function costOf(entry) {
+    const p = MODEL_PRICING[entry.model] || DEFAULT_PRICING;
+    return (
+      entry.input * p.input +
+      entry.output * p.output +
+      entry.cacheCreate * p.cacheWrite +
+      entry.cacheRead * p.cacheRead
+    ) / 1e6;
+  }
+
+  // Aggregate
+  let sessionCost = 0, weeklyCost = 0;
+  let sessionMsgs = 0, weeklyMsgs = 0;
   let oldestSessionTs = null;
   const sessionByModel = {};
-  const weeklyByModel = {};
-  const todayByModel = {};
 
   for (const entry of Object.values(byMsgId)) {
-    const tok = entry.input + entry.output;
     const ts = entry.timestamp;
+    const cost = costOf(entry);
 
-    // Weekly (last 7 days)
     if (ts >= weekAgo) {
-      weeklyTokens += tok;
-      weeklyByModel[entry.model] = (weeklyByModel[entry.model] || 0) + tok;
+      weeklyCost += cost;
+      weeklyMsgs++;
     }
 
-    // Today
-    if (ts.startsWith(today)) {
-      todayTokens += tok;
-      todayMsgs++;
-      todayByModel[entry.model] = (todayByModel[entry.model] || 0) + tok;
-    }
-
-    // Session window (last 5h)
     if (ts >= sessionCutoff) {
-      sessionTokens += tok;
+      sessionCost += cost;
       sessionMsgs++;
-      sessionByModel[entry.model] = (sessionByModel[entry.model] || 0) + tok;
+      const shortModel = entry.model.replace('claude-', '').replace(/-\d{8}$/, '');
+      sessionByModel[shortModel] = (sessionByModel[shortModel] || 0) + cost;
       if (!oldestSessionTs || ts < oldestSessionTs) oldestSessionTs = ts;
     }
   }
 
   return {
-    session: { tokens: sessionTokens, msgs: sessionMsgs, byModel: sessionByModel, oldestTs: oldestSessionTs },
-    weekly: { tokens: weeklyTokens, byModel: weeklyByModel },
-    today: { tokens: todayTokens, msgs: todayMsgs, byModel: todayByModel },
+    session: { cost: sessionCost, msgs: sessionMsgs, byModel: sessionByModel, oldestTs: oldestSessionTs },
+    weekly: { cost: weeklyCost, msgs: weeklyMsgs },
     activeSessions: activeFiles.size,
   };
 }
 
 function empty() {
   return {
-    session: { tokens: 0, msgs: 0, byModel: {}, oldestTs: null },
-    weekly: { tokens: 0, byModel: {} },
-    today: { tokens: 0, msgs: 0, byModel: {} },
+    session: { cost: 0, msgs: 0, byModel: {}, oldestTs: null },
+    weekly: { cost: 0, msgs: 0 },
     activeSessions: 0,
   };
 }
 
 // ─── Helpers ──────────────────────────────────────────
-
-function fmt(n) {
-  if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
-  if (n >= 1e3) return Math.round(n / 1e3) + 'K';
-  return String(n);
-}
 
 function getTier() {
   for (const p of [path.join(OPT, 'creditforge.toml'), path.join(process.env.HOME, '.creditforge', 'config.toml')]) {
@@ -183,7 +182,7 @@ function usageColor(pct) {
   if (pct >= 80) return '#ff6b6b';
   if (pct >= 60) return '#ffa94d';
   if (pct >= 40) return '#fcc419';
-  return '#4a90d9'; // blue like Claude's bars
+  return '#4a90d9';
 }
 
 function bar(percent, width) {
@@ -203,15 +202,19 @@ function resetCountdown(oldestTs) {
 }
 
 function weeklyResetDay() {
-  // Estimate: weekly window resets 7 days from the oldest entry in the window
-  // For display, show the next Saturday (Claude typically resets weekly)
   const now = new Date();
-  const dayOfWeek = now.getDay(); // 0=Sun
+  const dayOfWeek = now.getDay();
   const daysToSat = (6 - dayOfWeek + 7) % 7 || 7;
   const resetDate = new Date(now);
   resetDate.setDate(now.getDate() + daysToSat);
+  resetDate.setHours(14, 30, 0, 0); // approximate
   const dayName = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][resetDate.getDay()];
   return `Resets ${dayName} ${resetDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
+}
+
+function fmtCost(n) {
+  if (n >= 1) return '$' + n.toFixed(2);
+  return '$' + n.toFixed(3);
 }
 
 function out(text, params) {
@@ -230,8 +233,8 @@ function main() {
   const ti = TIERS[t];
   const data = scanTokens();
 
-  const sessPct = ti.session > 0 ? Math.round(data.session.tokens / ti.session * 1000) / 10 : 0;
-  const weekPct = ti.weekly > 0 ? Math.round(data.weekly.tokens / ti.weekly * 1000) / 10 : 0;
+  const sessPct = ti.sessionBudget > 0 ? Math.round(data.session.cost / ti.sessionBudget * 1000) / 10 : 0;
+  const weekPct = ti.weeklyBudget > 0 ? Math.round(data.weekly.cost / ti.weeklyBudget * 1000) / 10 : 0;
   const sessCol = usageColor(sessPct);
   const weekCol = usageColor(weekPct);
 
@@ -254,27 +257,27 @@ function main() {
   row('Weekly limits', 'size=14');
   out('---');
 
-  // All models
   row('All models', 'size=13');
   row(weeklyResetDay(), 'size=12 color=#666');
   row(`${bar(weekPct, 25)}   ${weekPct}% used`, `font=Menlo size=12 color=${weekCol}`);
   out('---');
 
-  // ── Per-model breakdown ────────────────────────────
+  // ── Per-model cost breakdown ───────────────────────
   const models = Object.entries(data.session.byModel)
     .sort((a, b) => b[1] - a[1])
-    .map(([m, v]) => ({ name: m.replace('claude-', '').replace(/-\d{8}$/, ''), tok: v }));
+    .map(([name, cost]) => ({ name, cost }));
 
   if (models.length > 0) {
     for (const m of models) {
-      const mPct = ti.session > 0 ? (m.tok / ti.session * 100).toFixed(1) : '0';
-      row(`${m.name}:  ${fmt(m.tok)}  (${mPct}%)`, 'size=12');
+      const mPct = ti.sessionBudget > 0 ? (m.cost / ti.sessionBudget * 100).toFixed(1) : '0';
+      row(`${m.name}:  ${fmtCost(m.cost)}  (${mPct}%)`, 'size=12');
     }
     out('---');
   }
 
-  // ── Activity summary ───────────────────────────────
-  row(`Messages:  ${data.today.msgs} today  /  ${data.session.msgs} session`, 'size=12');
+  // ── Activity ───────────────────────────────────────
+  row(`Session: ${data.session.msgs} msgs  (${fmtCost(data.session.cost)})`, 'size=12');
+  row(`Weekly:  ${data.weekly.msgs} msgs  (${fmtCost(data.weekly.cost)})`, 'size=12');
   if (data.activeSessions > 0) {
     row(`Active:  ${data.activeSessions} session${data.activeSessions > 1 ? 's' : ''} now`, 'size=12 color=#34a853');
   }
