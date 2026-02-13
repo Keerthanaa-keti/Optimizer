@@ -317,8 +317,9 @@
 
 <script>
 // Global Chart.js defaults for dark theme visibility
-Chart.defaults.color = '#c9d1d9';
+Chart.defaults.color = '#e6edf3';
 Chart.defaults.borderColor = '#30363d';
+Chart.defaults.plugins.legend.labels.color = '#e6edf3';
 
 const MODEL_COLORS = {
   'claude-opus-4-6': '#bc8cff',
@@ -667,10 +668,10 @@ function renderModelChart(data) {
             padding: 14,
             generateLabels: (chart) => {
               const dataset = chart.data.datasets[0];
-              const total = dataset.data.reduce((a, b) => a + b, 0);
               return chart.data.labels.map((label, i) => ({
                 text: `${label} (${fmtTokens(dataset.data[i])})`,
                 fillStyle: dataset.backgroundColor[i],
+                fontColor: '#e6edf3',
                 strokeStyle: 'transparent',
                 index: i,
               }));
