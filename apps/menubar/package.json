@@ -1,0 +1,19 @@
+{
+  "name": "@creditforge/menubar",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc -b",
+    "start": "electron dist/main.js",
+    "dist": "electron-builder --mac"
+  },
+  "dependencies": {
+    "@creditforge/token-monitor": "*",
+    "menubar": "^9.4.0"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  }
+}

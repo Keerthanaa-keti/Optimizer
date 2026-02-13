@@ -19,6 +19,7 @@ Usage:
   creditforge tokens [--json]                Show real token usage from Claude
   creditforge optimize [--dry-run] [--yes]   Scan, plan, approve, and execute
   creditforge dashboard [--port N] [--open]  Launch web dashboard
+  creditforge app                            Launch menubar app
 
 Options:
   --verbose, -v    Show detailed scan output
@@ -60,6 +61,15 @@ async function main(): Promise<void> {
     case 'dashboard':
       await runDashboard(args.slice(1));
       break;
+
+    case 'app': {
+      const { execSync } = await import('node:child_process');
+      const { join, dirname } = await import('node:path');
+      const appPath = join(dirname(__filename), '..', '..', 'menubar', 'dist', 'main.js');
+      console.log('Launching CreditForge menubar app...');
+      execSync(`npx electron "${appPath}"`, { stdio: 'inherit' });
+      break;
+    }
 
     case 'help':
     case '--help':

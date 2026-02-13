@@ -1,0 +1,26 @@
+appId: com.creditforge.menubar
+productName: CreditForge
+directories:
+  output: release
+  buildResources: assets
+files:
+  - dist/**/*
+  - ui/**/*
+  - assets/**/*
+  - package.json
+mac:
+  category: public.app-category.developer-tools
+  target:
+    - dmg
+    - zip
+  icon: assets/icon.icns
+  darkModeSupport: true
+dmg:
+  title: CreditForge
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications

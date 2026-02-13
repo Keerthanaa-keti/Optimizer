@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CreditForge</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Header -->
+    <div class="header">
+      <span class="header-title">CreditForge</span>
+      <button class="header-btn" id="quit-btn" title="Quit">&times;</button>
+    </div>
+
+    <!-- Plan usage limits -->
+    <div class="section-title">Plan usage limits</div>
+    <div class="divider"></div>
+
+    <!-- Current session -->
+    <div class="usage-section">
+      <div class="usage-label">Current session</div>
+      <div class="usage-reset" id="session-reset">Resets in 5h 0min</div>
+      <div class="progress-wrap">
+        <div class="progress-bar">
+          <div class="progress-fill" id="session-fill" style="width: 0%"></div>
+        </div>
+        <span class="progress-pct" id="session-pct">0% used</span>
+      </div>
+    </div>
+    <div class="divider"></div>
+
+    <!-- Weekly limits -->
+    <div class="usage-section">
+      <div class="usage-label">Weekly limits</div>
+    </div>
+    <div class="divider-thin"></div>
+
+    <!-- All models -->
+    <div class="usage-section">
+      <div class="usage-sublabel">All models</div>
+      <div class="usage-reset" id="weekly-reset">Resets Sat 2:30 PM</div>
+      <div class="progress-wrap">
+        <div class="progress-bar">
+          <div class="progress-fill" id="weekly-fill" style="width: 0%"></div>
+        </div>
+        <span class="progress-pct" id="weekly-pct">0% used</span>
+      </div>
+    </div>
+
+    <!-- Sonnet only -->
+    <div class="usage-section">
+      <div class="usage-sublabel">Sonnet only</div>
+      <div class="usage-reset" id="sonnet-reset">Resets Mon 9:30 PM</div>
+      <div class="progress-wrap">
+        <div class="progress-bar">
+          <div class="progress-fill sonnet" id="sonnet-fill" style="width: 0%"></div>
+        </div>
+        <span class="progress-pct" id="sonnet-pct">0% used</span>
+      </div>
+    </div>
+    <div class="divider"></div>
+
+    <!-- Alerts -->
+    <div id="alerts-container"></div>
+
+    <!-- Model breakdown -->
+    <div id="model-breakdown" class="model-section"></div>
+
+    <!-- Activity -->
+    <div class="activity-section">
+      <div class="activity-row">
+        <span id="session-msgs">Session: 0 msgs</span>
+        <span id="weekly-msgs">Weekly: 0</span>
+      </div>
+      <div class="activity-row" id="active-sessions-row" style="display: none">
+        <span class="active-dot"></span>
+        <span id="active-sessions-text">0 active sessions</span>
+      </div>
+    </div>
+    <div class="divider"></div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <div class="footer-actions">
+        <button class="btn" id="dashboard-btn">Open Dashboard</button>
+        <button class="btn btn-secondary" id="refresh-btn">Refresh</button>
+      </div>
+      <div class="footer-tier" id="tier-label">Max 5&times; $100/mo</div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
