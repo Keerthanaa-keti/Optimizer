@@ -153,7 +153,7 @@
 
   .stat-row:last-child { border-bottom: none; }
 
-  .stat-label { color: var(--text-dim); font-size: 14px; }
+  .stat-label { color: #b1bac4; font-size: 14px; }
 
   .stat-value {
     font-weight: 600;
@@ -469,16 +469,17 @@ function render(data) {
     </div>
 
     <div class="card chart-full">
+      <div class="card-title">All-Time Stats</div>
       <div class="stat-row">
-        <span class="stat-label">All-Time Sessions</span>
+        <span class="stat-label" style="color:#b1bac4">All-Time Sessions</span>
         <span class="stat-value">${data.allTime.sessions}</span>
       </div>
       <div class="stat-row">
-        <span class="stat-label">All-Time Messages</span>
+        <span class="stat-label" style="color:#b1bac4">All-Time Messages</span>
         <span class="stat-value">${data.allTime.messages.toLocaleString()}</span>
       </div>
       <div class="stat-row">
-        <span class="stat-label">Tracking Since</span>
+        <span class="stat-label" style="color:#b1bac4">Tracking Since</span>
         <span class="stat-value">${data.allTime.firstSession ? data.allTime.firstSession.slice(0, 10) : '--'}</span>
       </div>
     </div>
