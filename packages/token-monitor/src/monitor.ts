@@ -15,6 +15,8 @@ import {
   formatDate,
   daysAgo,
 } from './stats-parser.js';
+import { scanLiveUsage } from './jsonl-scanner.js';
+import type { JsonlDaySummary } from './types.js';
 
 export class TokenMonitor {
   private cache: StatsCache | null;
@@ -42,9 +44,21 @@ export class TokenMonitor {
     const todayTokens = getTokensForDate(this.cache, today);
     const todayActivity = getActivityForDate(this.cache, today);
 
-    const todayTotal = todayTokens
+    // Merge stats-cache with live JSONL data for today
+    const live = scanLiveUsage(today);
+    const cacheTotal = todayTokens
       ? Object.values(todayTokens.tokensByModel).reduce((a, b) => a + b, 0)
       : 0;
+
+    // Merge model breakdowns: take max per model
+    const mergedByModel: Record<string, number> = { ...(todayTokens?.tokensByModel ?? {}) };
+    for (const [model, tok] of Object.entries(live.tokensByModel)) {
+      mergedByModel[model] = Math.max(mergedByModel[model] || 0, tok);
+    }
+    const todayTotal = Math.max(
+      cacheTotal,
+      Object.values(mergedByModel).reduce((a, b) => a + b, 0),
+    );
 
     const weekEntries = getTokensInRange(this.cache, weekStart, today);
     const monthEntries = getTokensInRange(this.cache, monthStart, today);
@@ -58,14 +72,15 @@ export class TokenMonitor {
       timestamp: now.toISOString(),
       tier: this.tier,
       todayTokens: todayTotal,
-      todayMessages: todayActivity?.messageCount ?? 0,
+      todayMessages: Math.max(todayActivity?.messageCount ?? 0, live.messageCount),
       todaySessions: todayActivity?.sessionCount ?? 0,
       todayToolCalls: todayActivity?.toolCallCount ?? 0,
-      todayByModel: todayTokens?.tokensByModel ?? {},
+      todayByModel: mergedByModel,
       weekTokens: sumTokens(weekEntries),
       monthTokens: sumTokens(monthEntries),
       allTimeByModel: this.cache.modelUsage,
       estimatedDailyBudgetUsedPercent: usedPercent,
+      liveData: live,
     };
   }
 

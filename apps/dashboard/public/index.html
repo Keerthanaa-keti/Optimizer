@@ -11,7 +11,7 @@
     --surface: #161b22;
     --border: #30363d;
     --text: #e6edf3;
-    --text-dim: #8b949e;
+    --text-dim: #b1bac4;
     --accent: #58a6ff;
     --green: #3fb950;
     --yellow: #d29922;
@@ -104,10 +104,10 @@
 
   .card-title {
     font-size: 12px;
-    font-weight: 600;
+    font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: var(--text-dim);
+    color: var(--text);
     margin-bottom: 12px;
   }
 
@@ -210,9 +210,90 @@
 
   .error { color: var(--red); }
 
+  .live-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--green);
+    animation: pulse 2s ease-in-out infinite;
+    margin-right: 6px;
+  }
+
+  .live-dot.inactive {
+    background: var(--text-dim);
+    animation: none;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .session-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+
+  .session-row:last-child { border-bottom: none; }
+
+  .session-project {
+    color: var(--text);
+    font-weight: 500;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .session-meta {
+    color: var(--text-dim);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .token-detail-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 8px;
+  }
+
+  .token-detail-item {
+    background: var(--bg);
+    border-radius: 8px;
+    padding: 12px;
+  }
+
+  .token-detail-label {
+    font-size: 11px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .token-detail-value {
+    font-size: 20px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    margin-top: 2px;
+  }
+
+  .grid-three {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+
   @media (max-width: 900px) {
     .grid-top { grid-template-columns: 1fr; }
     .grid-bottom { grid-template-columns: 1fr; }
+    .grid-three { grid-template-columns: 1fr; }
   }
 </style>
 </head>
@@ -231,10 +312,14 @@
 </div>
 
 <div class="footer">
-  <span>CreditForge</span> &middot; Auto-refreshes every 5 minutes &middot; Data from ~/.claude/stats-cache.json
+  <span>CreditForge</span> &middot; Live refresh every 30s &middot; Full refresh every 5 min &middot; Stats + Live JSONL
 </div>
 
 <script>
+// Global Chart.js defaults for dark theme visibility
+Chart.defaults.color = '#c9d1d9';
+Chart.defaults.borderColor = '#30363d';
+
 const MODEL_COLORS = {
   'claude-opus-4-6': '#bc8cff',
   'claude-opus-4-5-20251101': '#58a6ff',
@@ -354,6 +439,12 @@ function render(data) {
       </div>
     </div>
 
+    <div class="grid-three" id="live-section">
+      ${renderSessionsCard(data)}
+      ${renderTokenDetailsCard(data)}
+      ${renderQuickStatsCard(data)}
+    </div>
+
     <div class="card chart-full" style="margin-bottom:16px">
       <div class="card-title">Daily Usage &mdash; Last 30 Days</div>
       <div class="chart-container">
@@ -445,7 +536,7 @@ function renderDailyChart(data) {
       maintainAspectRatio: false,
       interaction: { mode: 'index', intersect: false },
       plugins: {
-        legend: { labels: { color: '#8b949e', font: { size: 11 } } },
+        legend: { labels: { color: '#c9d1d9', font: { size: 11 } } },
         tooltip: {
           callbacks: {
             label: (item) => `${item.dataset.label}: ${fmtTokens(item.raw)}`,
@@ -456,13 +547,13 @@ function renderDailyChart(data) {
         x: {
           stacked: true,
           grid: { color: '#21262d' },
-          ticks: { color: '#8b949e', font: { size: 10 } },
+          ticks: { color: '#c9d1d9', font: { size: 10 } },
         },
         y: {
           stacked: true,
           grid: { color: '#21262d' },
           ticks: {
-            color: '#8b949e',
+            color: '#c9d1d9',
             callback: (v) => fmtTokens(v),
           },
         },
@@ -528,11 +619,11 @@ function renderHourChart(data) {
       scales: {
         x: {
           grid: { display: false },
-          ticks: { color: '#8b949e', font: { size: 10 } },
+          ticks: { color: '#c9d1d9', font: { size: 10 } },
         },
         y: {
           grid: { color: '#21262d' },
-          ticks: { color: '#8b949e', stepSize: 1 },
+          ticks: { color: '#c9d1d9', stepSize: 1 },
         },
       },
     },
@@ -571,8 +662,8 @@ function renderModelChart(data) {
           position: 'right',
           labels: {
             color: '#e6edf3',
-            font: { size: 12 },
-            padding: 12,
+            font: { size: 13, weight: '500' },
+            padding: 14,
             generateLabels: (chart) => {
               const dataset = chart.data.datasets[0];
               const total = dataset.data.reduce((a, b) => a + b, 0);
@@ -599,11 +690,143 @@ function renderModelChart(data) {
   });
 }
 
+function renderSessionsCard(data) {
+  const live = data.live || {};
+  const sessions = live.sessions || [];
+  const active = live.activeSessions || 0;
+
+  const dotClass = active > 0 ? 'live-dot' : 'live-dot inactive';
+  const statusText = active > 0
+    ? `${active} active session${active > 1 ? 's' : ''}`
+    : 'No active sessions';
+
+  let sessionRows = '';
+  if (sessions.length === 0) {
+    sessionRows = '<div style="color:var(--text-dim);font-size:13px;padding:8px 0">No sessions today</div>';
+  } else {
+    for (const s of sessions.slice(0, 5)) {
+      const proj = s.project.replace(/-Users-k0v0354-Documents-ClaudeExperiments-/g, '').replace(/-/g, '/');
+      const dotHtml = s.isActive ? '<span class="live-dot" style="width:6px;height:6px"></span>' : '';
+      sessionRows += `
+        <div class="session-row">
+          <span class="session-project">${dotHtml}${proj}</span>
+          <span class="session-meta">${fmtTokens(s.tokens)} &middot; ${s.messages} msgs &middot; ${shortModel(s.model)}</span>
+        </div>`;
+    }
+  }
+
+  return `
+    <div class="card">
+      <div class="card-title"><span class="${dotClass}"></span>Sessions Today</div>
+      <div style="font-size:13px;color:var(--text-dim);margin-bottom:8px">${statusText}</div>
+      ${sessionRows}
+    </div>`;
+}
+
+function renderTokenDetailsCard(data) {
+  const live = data.live || {};
+  const detailed = live.detailedByModel || {};
+
+  // Aggregate across all models
+  let totalInput = 0, totalOutput = 0, totalCacheCreate = 0, totalCacheRead = 0;
+  for (const d of Object.values(detailed)) {
+    totalInput += d.inputTokens || 0;
+    totalOutput += d.outputTokens || 0;
+    totalCacheCreate += d.cacheCreationTokens || 0;
+    totalCacheRead += d.cacheReadTokens || 0;
+  }
+
+  return `
+    <div class="card">
+      <div class="card-title">Token Details (Live)</div>
+      <div class="token-detail-grid">
+        <div class="token-detail-item">
+          <div class="token-detail-label">Input</div>
+          <div class="token-detail-value" style="color:var(--accent)">${fmtTokens(totalInput)}</div>
+        </div>
+        <div class="token-detail-item">
+          <div class="token-detail-label">Output</div>
+          <div class="token-detail-value" style="color:var(--purple)">${fmtTokens(totalOutput)}</div>
+        </div>
+        <div class="token-detail-item">
+          <div class="token-detail-label">Cache Write</div>
+          <div class="token-detail-value" style="color:var(--yellow)">${fmtTokens(totalCacheCreate)}</div>
+        </div>
+        <div class="token-detail-item">
+          <div class="token-detail-label">Cache Read</div>
+          <div class="token-detail-value" style="color:var(--green)">${fmtTokens(totalCacheRead)}</div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function renderQuickStatsCard(data) {
+  const live = data.live || {};
+  const remaining = Math.max(0, data.dailyBudget - data.today.tokens);
+  const burnRate = live.messageCount > 0 ? Math.round(data.today.tokens / live.messageCount) : 0;
+
+  return `
+    <div class="card">
+      <div class="card-title">Quick Stats</div>
+      <div class="stat-row">
+        <span class="stat-label">Remaining Budget</span>
+        <span class="stat-value">${fmtTokens(remaining)}</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Avg Tokens/Message</span>
+        <span class="stat-value">${fmtTokens(burnRate)}</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Live Messages</span>
+        <span class="stat-value">${live.messageCount || 0}</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Data Source</span>
+        <span class="stat-value" style="color:var(--green)">Live JSONL</span>
+      </div>
+    </div>`;
+}
+
+// Fast refresh: update live section every 30 seconds without full re-render
+async function fastRefresh() {
+  try {
+    const res = await fetch('/api/live-stats');
+    if (!res.ok) return;
+    const live = await res.json();
+    // Update just the gauge and live section if data object is cached
+    if (window._lastData) {
+      window._lastData.live = {
+        activeSessions: live.activeSessions,
+        sessions: live.sessions,
+        detailedByModel: live.detailedByModel,
+        messageCount: live.messageCount,
+      };
+      // Update live section HTML
+      const liveSection = document.getElementById('live-section');
+      if (liveSection) {
+        liveSection.innerHTML = renderSessionsCard(window._lastData) +
+          renderTokenDetailsCard(window._lastData) +
+          renderQuickStatsCard(window._lastData);
+      }
+    }
+  } catch { /* silent fail */ }
+}
+
+// Store data globally for fast refresh
+const _origRender = render;
+render = function(data) {
+  window._lastData = data;
+  _origRender(data);
+};
+
 // Initial load
 refresh();
 
-// Auto-refresh every 5 minutes
+// Full refresh every 5 minutes
 setInterval(refresh, 5 * 60 * 1000);
+
+// Fast live refresh every 30 seconds
+setInterval(fastRefresh, 30 * 1000);
 </script>
 </body>
 </html>

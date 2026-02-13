@@ -1,8 +1,8 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
-import { loadStatsCache, TIER_LIMITS } from '@creditforge/token-monitor';
-import type { SubscriptionTier } from '@creditforge/token-monitor';
+import { loadStatsCache, scanLiveUsage, TIER_LIMITS } from '@creditforge/token-monitor';
+import type { SubscriptionTier, JsonlDaySummary } from '@creditforge/token-monitor';
 
 // When compiled to CJS, __dirname is available. In dist/, go up to package root.
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
@@ -40,11 +40,20 @@ function buildApiStats(): object | null {
   const tierInfo = TIER_LIMITS[tier];
   const today = formatDate(new Date());
 
-  // Today
+  // Today — merge stats-cache with live JSONL data
   const todayTokenEntry = cache.dailyModelTokens.find(d => d.date === today);
-  const todayTokens = todayTokenEntry
+  const live = scanLiveUsage(today);
+  const cacheTokens = todayTokenEntry
     ? Object.values(todayTokenEntry.tokensByModel).reduce((a, b) => a + b, 0)
     : 0;
+
+  // Merge model breakdowns: take max per model from cache vs live
+  const mergedByModel: Record<string, number> = { ...(todayTokenEntry?.tokensByModel ?? {}) };
+  for (const [model, tok] of Object.entries(live.tokensByModel)) {
+    mergedByModel[model] = Math.max(mergedByModel[model] || 0, tok);
+  }
+  const todayTokens = Math.max(cacheTokens, Object.values(mergedByModel).reduce((a, b) => a + b, 0));
+
   const todayActivity = cache.dailyActivity.find(d => d.date === today);
   const pct = tierInfo.estimatedDailyTokens > 0
     ? Math.round((todayTokens / tierInfo.estimatedDailyTokens) * 1000) / 10
@@ -111,10 +120,16 @@ function buildApiStats(): object | null {
       date: today,
       tokens: todayTokens,
       pct,
-      messages: todayActivity?.messageCount ?? 0,
+      messages: Math.max(todayActivity?.messageCount ?? 0, live.messageCount),
       sessions: todayActivity?.sessionCount ?? 0,
       toolCalls: todayActivity?.toolCallCount ?? 0,
-      byModel: todayTokenEntry?.tokensByModel ?? {},
+      byModel: mergedByModel,
+    },
+    live: {
+      activeSessions: live.activeSessions,
+      sessions: live.sessions,
+      detailedByModel: live.detailedByModel,
+      messageCount: live.messageCount,
     },
     week: {
       tokens: weekTokens,
@@ -147,6 +162,16 @@ export function startServer(port: number): http.Server {
       return;
     }
 
+    if (req.url === '/api/live-stats') {
+      const live = scanLiveUsage();
+      res.writeHead(200, {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+      });
+      res.end(JSON.stringify(live));
+      return;
+    }
+
     // Serve index.html for root and any other path
     const htmlPath = path.join(PUBLIC_DIR, 'index.html');
     if (!fs.existsSync(htmlPath)) {
@@ -160,8 +185,8 @@ export function startServer(port: number): http.Server {
     res.end(html);
   });
 
-  server.listen(port, () => {
-    console.log(`CreditForge Dashboard running at http://localhost:${port}`);
+  server.listen(port, '127.0.0.1', () => {
+    console.log(`CreditForge Dashboard running at http://127.0.0.1:${port}`);
   });
 
   return server;

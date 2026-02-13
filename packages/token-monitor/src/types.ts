@@ -69,6 +69,7 @@ export interface TokenSnapshot {
   monthTokens: number;
   allTimeByModel: Record<string, ModelUsage>;
   estimatedDailyBudgetUsedPercent: number;
+  liveData?: JsonlDaySummary;
 }
 
 export interface UsageSummary {
@@ -78,4 +79,32 @@ export interface UsageSummary {
   peakDay: { tokens: number; date: string };
   projectedMonthlyTokens: number;
   userPatterns: { peakHours: number[]; activeDaysPerWeek: number };
+}
+
+// ─── Live JSONL Token Types ──────────────────────────────────
+
+export interface JsonlTokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+  cacheCreationTokens: number;
+  cacheReadTokens: number;
+}
+
+export interface JsonlSessionInfo {
+  filePath: string;
+  project: string;
+  model: string;
+  tokens: number;
+  messages: number;
+  isActive: boolean;
+}
+
+export interface JsonlDaySummary {
+  date: string;
+  totalInputOutput: number;
+  tokensByModel: Record<string, number>;
+  detailedByModel: Record<string, JsonlTokenUsage>;
+  sessions: JsonlSessionInfo[];
+  messageCount: number;
+  activeSessions: number;
 }
