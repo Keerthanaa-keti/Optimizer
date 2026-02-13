@@ -238,25 +238,27 @@ function main() {
   out(`CF ${pct}%${activeInd}`, `size=13 color=${col}`);
   out('---');
 
+  const K = 'color=#111111'; // force dark text (xbar defaults to grey)
+
   // ── Daily Usage (progress bar) ─────────────────────
-  out('Daily Usage', 'size=14');
+  out('Daily Usage', `size=14 ${K}`);
   out(`${bar(pct, 20)}  ${pct}%`, `font=Menlo size=13 color=${col}`);
-  out(`${fmt(tokens)} of ${fmt(ti.daily)} tokens`, 'size=13');
+  out(`${fmt(tokens)} of ${fmt(ti.daily)} tokens`, `size=13 ${K}`);
   out('---');
 
   // ── Weekly Usage (progress bar) ────────────────────
   const wkCol = usageColor(wkPct);
-  out('Weekly Usage', 'size=14');
+  out('Weekly Usage', `size=14 ${K}`);
   out(`${bar(wkPct, 20)}  ${wkPct}%`, `font=Menlo size=13 color=${wkCol}`);
-  out(`${fmt(wkTot)} of ${fmt(wkBudget)} tokens`, 'size=13');
+  out(`${fmt(wkTot)} of ${fmt(wkBudget)} tokens`, `size=13 ${K}`);
   out('---');
 
   // ── Today ──────────────────────────────────────────
-  out('Today', 'size=14');
-  out(`Messages:          ${msgs}`, 'size=13');
-  out(`Sessions:          ${sess}`, 'size=13');
-  out(`Tool Calls:        ${tools}`, 'size=13');
-  out(`Remaining:         ${fmt(rem)}`, 'size=13');
+  out('Today', `size=14 ${K}`);
+  out(`Messages:          ${msgs}`, `size=13 ${K}`);
+  out(`Sessions:          ${sess}`, `size=13 ${K}`);
+  out(`Tool Calls:        ${tools}`, `size=13 ${K}`);
+  out(`Remaining:         ${fmt(rem)}`, `size=13 ${K}`);
   if (liveActive > 0) {
     out(`Active Now:        ${liveActive}`, 'size=13 color=#34a853');
   }
@@ -264,36 +266,36 @@ function main() {
 
   // ── Models ─────────────────────────────────────────
   if (models.length > 0) {
-    out('Models', 'size=14');
+    out('Models', `size=14 ${K}`);
     for (const m of models) {
       const mPct = ti.daily > 0 ? (m.tok / ti.daily * 100).toFixed(1) : '0';
-      out(`${m.name}:  ${fmt(m.tok)}  (${mPct}%)`, 'size=13');
+      out(`${m.name}:  ${fmt(m.tok)}  (${mPct}%)`, `size=13 ${K}`);
     }
     out('---');
   }
 
   // ── This Week ──────────────────────────────────────
-  out('This Week', 'size=14');
-  out(`Total:             ${fmt(wkTot)}`, 'size=13');
-  out(`Daily Average:     ${fmt(wkAvg)}`, 'size=13');
-  out(`Peak Day:          ${fmt(peak.tok)} (${peak.date.slice(5)})`, 'size=13');
-  out(`Trend:             ${trendWord}`, 'size=13');
+  out('This Week', `size=14 ${K}`);
+  out(`Total:             ${fmt(wkTot)}`, `size=13 ${K}`);
+  out(`Daily Average:     ${fmt(wkAvg)}`, `size=13 ${K}`);
+  out(`Peak Day:          ${fmt(peak.tok)} (${peak.date.slice(5)})`, `size=13 ${K}`);
+  out(`Trend:             ${trendWord}`, `size=13 ${K}`);
   out('---');
 
   // ── All Time ───────────────────────────────────────
   const since = (c.firstSessionDate || '').slice(0, 10);
-  out('All Time', 'size=14');
-  out(`Sessions:          ${c.totalSessions || 0}`, 'size=13');
-  out(`Messages:          ${fmt(c.totalMessages || 0)}`, 'size=13');
-  out(`Active Days:       ${actDays}/wk`, 'size=13');
-  out(`Since:             ${since}`, 'size=13');
+  out('All Time', `size=14 ${K}`);
+  out(`Sessions:          ${c.totalSessions || 0}`, `size=13 ${K}`);
+  out(`Messages:          ${fmt(c.totalMessages || 0)}`, `size=13 ${K}`);
+  out(`Active Days:       ${actDays}/wk`, `size=13 ${K}`);
+  out(`Since:             ${since}`, `size=13 ${K}`);
   out('---');
 
   // ── Actions ────────────────────────────────────────
   out('Open Dashboard', `bash=/opt/homebrew/bin/node param1=${CLI} param2=dashboard param3=--open terminal=false`);
   out('Refresh', 'refresh=true');
   out('---');
-  out(`${ti.label}`, 'size=11 color=#aaa');
+  out(`${ti.label}`, 'size=11 color=#999');
 }
 
 main();
