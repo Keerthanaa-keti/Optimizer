@@ -289,7 +289,7 @@ function main() {
   row(`${bar(sonnetPct, 25)}   ${sonnetPct}% used`, `font=Menlo size=12 color=${sonnetCol}`);
   out('---');
 
-  // ── Per-model cost breakdown ───────────────────────
+  // ── Per-model session breakdown ──────────────────────
   const models = Object.entries(data.session.byModel)
     .sort((a, b) => b[1] - a[1])
     .map(([name, cost]) => ({ name, cost }));
@@ -297,14 +297,14 @@ function main() {
   if (models.length > 0) {
     for (const m of models) {
       const mPct = ti.sessionBudget > 0 ? (m.cost / ti.sessionBudget * 100).toFixed(1) : '0';
-      row(`${m.name}:  ${fmtCost(m.cost)}  (${mPct}%)`, 'size=12');
+      row(`${m.name}:  ${mPct}%`, 'size=12');
     }
     out('---');
   }
 
   // ── Activity ───────────────────────────────────────
-  row(`Session: ${data.session.msgs} msgs  (${fmtCost(data.session.cost)})`, 'size=12');
-  row(`Weekly:  ${data.weekly.msgs} msgs  (${fmtCost(data.weekly.cost)})`, 'size=12');
+  row(`Session: ${data.session.msgs} messages`, 'size=12');
+  row(`Weekly:  ${data.weekly.msgs} messages`, 'size=12');
   if (data.activeSessions > 0) {
     row(`Active:  ${data.activeSessions} session${data.activeSessions > 1 ? 's' : ''} now`, 'size=12 color=#34a853');
   }
