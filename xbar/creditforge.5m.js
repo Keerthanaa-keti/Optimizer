@@ -152,6 +152,12 @@ function out(text, params) {
   console.log(params ? `${text} | ${params}` : text);
 }
 
+// Like out(), but adds href=# so xbar renders the item as enabled (not greyed out)
+function row(text, params) {
+  const p = params ? `${params} href=#` : 'href=#';
+  console.log(`${text} | ${p}`);
+}
+
 // ─── Main ─────────────────────────────────────────────
 
 function main() {
@@ -238,57 +244,55 @@ function main() {
   out(`CF ${pct}%${activeInd}`, `size=13 color=${col}`);
   out('---');
 
-  const K = 'color=#111111'; // force dark text (xbar defaults to grey)
-
   // ── Daily Usage (progress bar) ─────────────────────
-  out('Daily Usage', `size=14 ${K}`);
-  out(`${bar(pct, 20)}  ${pct}%`, `font=Menlo size=13 color=${col}`);
-  out(`${fmt(tokens)} of ${fmt(ti.daily)} tokens`, `size=13 ${K}`);
+  row('Daily Usage', 'size=14');
+  row(`${bar(pct, 20)}  ${pct}%`, `font=Menlo size=13 color=${col}`);
+  row(`${fmt(tokens)} of ${fmt(ti.daily)} tokens`, 'size=13');
   out('---');
 
   // ── Weekly Usage (progress bar) ────────────────────
   const wkCol = usageColor(wkPct);
-  out('Weekly Usage', `size=14 ${K}`);
-  out(`${bar(wkPct, 20)}  ${wkPct}%`, `font=Menlo size=13 color=${wkCol}`);
-  out(`${fmt(wkTot)} of ${fmt(wkBudget)} tokens`, `size=13 ${K}`);
+  row('Weekly Usage', 'size=14');
+  row(`${bar(wkPct, 20)}  ${wkPct}%`, `font=Menlo size=13 color=${wkCol}`);
+  row(`${fmt(wkTot)} of ${fmt(wkBudget)} tokens`, 'size=13');
   out('---');
 
   // ── Today ──────────────────────────────────────────
-  out('Today', `size=14 ${K}`);
-  out(`Messages:          ${msgs}`, `size=13 ${K}`);
-  out(`Sessions:          ${sess}`, `size=13 ${K}`);
-  out(`Tool Calls:        ${tools}`, `size=13 ${K}`);
-  out(`Remaining:         ${fmt(rem)}`, `size=13 ${K}`);
+  row('Today', 'size=14');
+  row(`Messages:          ${msgs}`, 'size=13');
+  row(`Sessions:          ${sess}`, 'size=13');
+  row(`Tool Calls:        ${tools}`, 'size=13');
+  row(`Remaining:         ${fmt(rem)}`, 'size=13');
   if (liveActive > 0) {
-    out(`Active Now:        ${liveActive}`, 'size=13 color=#34a853');
+    row(`Active Now:        ${liveActive}`, 'size=13 color=#34a853');
   }
   out('---');
 
   // ── Models ─────────────────────────────────────────
   if (models.length > 0) {
-    out('Models', `size=14 ${K}`);
+    row('Models', 'size=14');
     for (const m of models) {
       const mPct = ti.daily > 0 ? (m.tok / ti.daily * 100).toFixed(1) : '0';
-      out(`${m.name}:  ${fmt(m.tok)}  (${mPct}%)`, `size=13 ${K}`);
+      row(`${m.name}:  ${fmt(m.tok)}  (${mPct}%)`, 'size=13');
     }
     out('---');
   }
 
   // ── This Week ──────────────────────────────────────
-  out('This Week', `size=14 ${K}`);
-  out(`Total:             ${fmt(wkTot)}`, `size=13 ${K}`);
-  out(`Daily Average:     ${fmt(wkAvg)}`, `size=13 ${K}`);
-  out(`Peak Day:          ${fmt(peak.tok)} (${peak.date.slice(5)})`, `size=13 ${K}`);
-  out(`Trend:             ${trendWord}`, `size=13 ${K}`);
+  row('This Week', 'size=14');
+  row(`Total:             ${fmt(wkTot)}`, 'size=13');
+  row(`Daily Average:     ${fmt(wkAvg)}`, 'size=13');
+  row(`Peak Day:          ${fmt(peak.tok)} (${peak.date.slice(5)})`, 'size=13');
+  row(`Trend:             ${trendWord}`, 'size=13');
   out('---');
 
   // ── All Time ───────────────────────────────────────
   const since = (c.firstSessionDate || '').slice(0, 10);
-  out('All Time', `size=14 ${K}`);
-  out(`Sessions:          ${c.totalSessions || 0}`, `size=13 ${K}`);
-  out(`Messages:          ${fmt(c.totalMessages || 0)}`, `size=13 ${K}`);
-  out(`Active Days:       ${actDays}/wk`, `size=13 ${K}`);
-  out(`Since:             ${since}`, `size=13 ${K}`);
+  row('All Time', 'size=14');
+  row(`Sessions:          ${c.totalSessions || 0}`, 'size=13');
+  row(`Messages:          ${fmt(c.totalMessages || 0)}`, 'size=13');
+  row(`Active Days:       ${actDays}/wk`, 'size=13');
+  row(`Since:             ${since}`, 'size=13');
   out('---');
 
   // ── Actions ────────────────────────────────────────
