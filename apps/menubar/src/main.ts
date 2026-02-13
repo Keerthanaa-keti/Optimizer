@@ -1,6 +1,7 @@
-import { app, BrowserWindow, ipcMain, shell, nativeTheme } from 'electron';
+import { app, ipcMain, shell, nativeTheme, nativeImage, Tray } from 'electron';
 import { menubar } from 'menubar';
 import path from 'node:path';
+import fs from 'node:fs';
 import { getUsageData } from './data.js';
 import { getAlerts } from './alerts.js';
 
@@ -14,9 +15,50 @@ function createMenubar() {
   const iconPath = path.join(__dirname, '..', 'assets', 'iconTemplate.png');
   const indexPath = path.join(__dirname, '..', 'ui', 'index.html');
 
+  console.log('[CreditForge] Index path:', indexPath, 'exists:', fs.existsSync(indexPath));
+
+  // Create menubar icon: 22x22 gauge/meter as nativeImage
+  const size = 22;
+  const buf = Buffer.alloc(size * size * 4);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const dx = x - 11, dy = y - 11;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const i = (y * size + x) * 4;
+      if (dist >= 7.5 && dist <= 9.5) {
+        buf[i] = 0; buf[i + 1] = 0; buf[i + 2] = 0; buf[i + 3] = 255;
+      } else if (dist <= 2) {
+        buf[i] = 0; buf[i + 1] = 0; buf[i + 2] = 0; buf[i + 3] = 255;
+      }
+    }
+  }
+  const icon = nativeImage.createFromBuffer(buf, { width: size, height: size });
+  icon.setTemplateImage(true);
+
+  // Register IPC handlers BEFORE creating menubar (preloadWindow triggers early loads)
+  ipcMain.handle('get-usage-data', () => getUsageData());
+  ipcMain.handle('get-alerts', (_event, usageJson: string) => {
+    return getAlerts(JSON.parse(usageJson));
+  });
+  ipcMain.handle('get-theme', () => nativeTheme.shouldUseDarkColors ? 'dark' : 'light');
+  ipcMain.handle('open-dashboard', () => {
+    shell.openExternal('http://localhost:3141');
+  });
+
+  const tray = new Tray(icon);
+  tray.setToolTip('CreditForge');
+
+  // Show text label in menubar (visible even if icon is small)
+  try {
+    const data = getUsageData();
+    tray.setTitle(` CF ${data.sessionPct}%`);
+  } catch {
+    tray.setTitle(' CF');
+  }
+
   const mb = menubar({
+    tray,
     index: `file://${indexPath}`,
-    icon: iconPath,
     preloadWindow: true,
     browserWindow: {
       width: WINDOW_WIDTH,
@@ -38,15 +80,15 @@ function createMenubar() {
   });
 
   mb.on('ready', () => {
-    // Set up IPC handlers
-    ipcMain.handle('get-usage-data', () => getUsageData());
-    ipcMain.handle('get-alerts', (_event, usageJson: string) => {
-      return getAlerts(JSON.parse(usageJson));
-    });
-    ipcMain.handle('get-theme', () => nativeTheme.shouldUseDarkColors ? 'dark' : 'light');
-    ipcMain.handle('open-dashboard', () => {
-      shell.openExternal('http://localhost:3141');
-    });
+    console.log('[CreditForge] Menubar ready');
+
+    // Update tray title periodically (even when popup is hidden)
+    setInterval(() => {
+      try {
+        const data = getUsageData();
+        tray.setTitle(` CF ${data.sessionPct}%`);
+      } catch { /* ignore */ }
+    }, REFRESH_INTERVAL_MS);
 
     // Listen for theme changes
     nativeTheme.on('updated', () => {
@@ -55,10 +97,9 @@ function createMenubar() {
   });
 
   mb.on('after-show', () => {
-    // Refresh immediately on show
+    console.log('[CreditForge] Popup shown');
     mb.window?.webContents.send('refresh');
 
-    // Start periodic refresh
     if (refreshTimer) clearInterval(refreshTimer);
     refreshTimer = setInterval(() => {
       mb.window?.webContents.send('refresh');
@@ -76,9 +117,10 @@ function createMenubar() {
 }
 
 app.on('ready', () => {
+  console.log('[CreditForge] App ready, creating menubar...');
   createMenubar();
 });
 
-app.on('window-all-closed', (e: Event) => {
-  e.preventDefault(); // Keep running in tray
+app.on('window-all-closed', () => {
+  // Don't quit — keep running in tray
 });

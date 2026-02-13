@@ -1,6 +1,13 @@
 // Ambient type declarations for Electron + menubar
 // These are minimal stubs — replaced by real types after `npm install`
 
+declare namespace Electron {
+  interface NativeImage {
+    setTemplateImage(option: boolean): void;
+    getSize(): { width: number; height: number };
+  }
+}
+
 declare module 'electron' {
   export const app: {
     on(event: string, listener: (...args: any[]) => void): void;
@@ -10,7 +17,14 @@ declare module 'electron' {
   export class BrowserWindow {
     webContents: {
       send(channel: string, ...args: any[]): void;
+      openDevTools(options?: any): void;
     };
+  }
+
+  export class Tray {
+    constructor(image: any);
+    setToolTip(tooltip: string): void;
+    setTitle(title: string): void;
   }
 
   export const ipcMain: {
@@ -31,15 +45,22 @@ declare module 'electron' {
     on(event: string, listener: () => void): void;
   };
 
+  export const nativeImage: {
+    createFromPath(path: string): Electron.NativeImage;
+    createFromBuffer(buffer: Buffer, options?: { width?: number; height?: number; scaleFactor?: number }): Electron.NativeImage;
+    createEmpty(): Electron.NativeImage;
+  };
+
   export const contextBridge: {
     exposeInMainWorld(apiKey: string, api: Record<string, any>): void;
   };
 }
 
 declare module 'menubar' {
-  import type { BrowserWindow } from 'electron';
+  import type { BrowserWindow, Tray } from 'electron';
 
   interface MenubarOptions {
+    tray?: Tray;
     index?: string;
     icon?: string;
     preloadWindow?: boolean;
@@ -52,6 +73,7 @@ declare module 'menubar' {
     on(event: string, listener: (...args: any[]) => void): void;
     window?: BrowserWindow;
     app: any;
+    tray: Tray;
   }
 
   export function menubar(opts: MenubarOptions): Menubar;
