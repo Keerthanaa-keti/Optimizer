@@ -205,24 +205,11 @@ function main() {
   const r3 = wk.slice(-3), ol = wk.slice(0, -3);
   const rA = r3.length ? r3.reduce((s, e) => s + sum(e), 0) / r3.length : 0;
   const oA = ol.length ? ol.reduce((s, e) => s + sum(e), 0) / ol.length : 0;
-  let trendIcon = '\u2192', trendWord = 'stable', trendCol = '#868e96';
-  if (oA > 0 && rA > oA * 1.2) { trendIcon = '\u2191'; trendWord = 'up'; trendCol = '#ffa94d'; }
-  else if (oA > 0 && rA < oA * 0.8) { trendIcon = '\u2193'; trendWord = 'down'; trendCol = '#51cf66'; }
-
-  // ── Sparkline ──────────────────────────────────────
-  const spk = '\u2581\u2582\u2583\u2584\u2585\u2586\u2587\u2588';
-  const vals = [];
-  for (let i = 6; i >= 0; i--) vals.push(sum((c.dailyModelTokens || []).find(d => d.date === dAgo(i))));
-  const mx = Math.max(...vals, 1);
-  const dayChars = 'SMTWTFS';
-  const sparkStr = vals.map((v, i) => {
-    const ch = dayChars[new Date(dAgo(6 - i) + 'T12:00:00').getDay()];
-    return ch + spk[Math.min(Math.floor(v / mx * 7), 7)];
-  }).join(' ');
+  let trendWord = 'Stable';
+  if (oA > 0 && rA > oA * 1.2) trendWord = 'Trending Up';
+  else if (oA > 0 && rA < oA * 0.8) trendWord = 'Trending Down';
 
   // ── Activity ───────────────────────────────────────
-  const topHrs = Object.entries(c.hourCounts || {}).sort((a, b) => b[1] - a[1])
-    .slice(0, 3).map(([h]) => h.padStart(2, '0') + 'h').join('  ');
   const a30 = (c.dailyActivity || []).filter(d => d.date >= dAgo(30));
   const actDays = a30.length > 0 ? Math.round(a30.length / 30 * 7 * 10) / 10 : 0;
 
@@ -232,63 +219,74 @@ function main() {
         .map(([m, v]) => ({ name: m.replace('claude-', '').replace(/-\d{8}$/, ''), tok: v }))
     : [];
 
+  // ── Weekly % ────────────────────────────────────────
+  const wkBudget = ti.daily * 7;
+  const wkPct = wkBudget > 0 ? Math.round(wkTot / wkBudget * 1000) / 10 : 0;
+
   // ══════════════════════════════════════════════════
-  // OUTPUT — Clean system-font layout
+  // OUTPUT
   // ══════════════════════════════════════════════════
+
+  // Helper: build a progress bar string
+  function bar(percent, width) {
+    const filled = Math.round(Math.min(percent, 100) / 100 * width);
+    return '\u2588'.repeat(filled) + '\u2591'.repeat(width - filled);
+  }
 
   // ── Menubar line ───────────────────────────────────
   const activeInd = liveActive > 0 ? ' *' : '';
   out(`CF ${pct}%${activeInd}`, `size=13 color=${col}`);
   out('---');
 
-  // ── Usage header ───────────────────────────────────
-  out(`${pct}% of Daily Budget`, 'size=15');
-  out(`${fmt(tokens)} of ${fmt(ti.daily)} tokens used`, 'size=12 color=#888');
+  // ── Daily Usage (progress bar) ─────────────────────
+  out('Daily Usage', 'size=14');
+  out(`${bar(pct, 20)}  ${pct}%`, `font=Menlo size=13 color=${col}`);
+  out(`${fmt(tokens)} of ${fmt(ti.daily)} tokens`, 'size=13');
+  out('---');
+
+  // ── Weekly Usage (progress bar) ────────────────────
+  const wkCol = usageColor(wkPct);
+  out('Weekly Usage', 'size=14');
+  out(`${bar(wkPct, 20)}  ${wkPct}%`, `font=Menlo size=13 color=${wkCol}`);
+  out(`${fmt(wkTot)} of ${fmt(wkBudget)} tokens`, 'size=13');
   out('---');
 
   // ── Today ──────────────────────────────────────────
-  const W = 18; // column width for alignment
-  const pad = (label) => label + ' '.repeat(Math.max(W - label.length, 1));
-
-  out('Today', 'size=13 color=#888');
-  out(`${pad('Messages')}${msgs}`, 'size=13 font=Menlo');
-  out(`${pad('Sessions')}${sess}`, 'size=13 font=Menlo');
-  out(`${pad('Tool Calls')}${tools}`, 'size=13 font=Menlo');
-  out(`${pad('Remaining')}${fmt(rem)}`, 'size=13 font=Menlo');
+  out('Today', 'size=14');
+  out(`Messages:          ${msgs}`, 'size=13');
+  out(`Sessions:          ${sess}`, 'size=13');
+  out(`Tool Calls:        ${tools}`, 'size=13');
+  out(`Remaining:         ${fmt(rem)}`, 'size=13');
   if (liveActive > 0) {
-    out(`${pad('Active Now')}${liveActive}`, 'size=13 font=Menlo color=#3fb950');
+    out(`Active Now:        ${liveActive}`, 'size=13 color=#34a853');
   }
   out('---');
 
   // ── Models ─────────────────────────────────────────
   if (models.length > 0) {
-    out('Models', 'size=13 color=#888');
+    out('Models', 'size=14');
     for (const m of models) {
       const mPct = ti.daily > 0 ? (m.tok / ti.daily * 100).toFixed(1) : '0';
-      out(`${pad(m.name)}${fmt(m.tok)}  (${mPct}%)`, 'size=13 font=Menlo');
+      out(`${m.name}:  ${fmt(m.tok)}  (${mPct}%)`, 'size=13');
     }
     out('---');
   }
 
   // ── This Week ──────────────────────────────────────
-  out('This Week', 'size=13 color=#888');
-  out(`${pad('Total')}${fmt(wkTot)}`, 'size=13 font=Menlo');
-  out(`${pad('Daily Average')}${fmt(wkAvg)}`, 'size=13 font=Menlo');
-  out(`${pad('Peak Day')}${fmt(peak.tok)} (${peak.date.slice(5)})`, 'size=13 font=Menlo');
-  out(`${pad('Trend')}${trendWord}`, `size=13 font=Menlo color=${trendCol}`);
-  out('---');
-
-  // ── History sparkline ──────────────────────────────
-  out(sparkStr, 'font=Menlo size=14');
+  out('This Week', 'size=14');
+  out(`Total:             ${fmt(wkTot)}`, 'size=13');
+  out(`Daily Average:     ${fmt(wkAvg)}`, 'size=13');
+  out(`Peak Day:          ${fmt(peak.tok)} (${peak.date.slice(5)})`, 'size=13');
+  out(`Trend:             ${trendWord}`, 'size=13');
   out('---');
 
   // ── All Time ───────────────────────────────────────
   const since = (c.firstSessionDate || '').slice(0, 10);
-  out('All Time', 'size=13 color=#888');
-  out(`${pad('Sessions')}${c.totalSessions || 0}`, 'size=13 font=Menlo');
-  out(`${pad('Messages')}${fmt(c.totalMessages || 0)}`, 'size=13 font=Menlo');
-  out(`${pad('Active Days')}${actDays}/wk`, 'size=13 font=Menlo');
-  out(`${pad('Since')}${since}`, 'size=13 font=Menlo');
+  out('All Time', 'size=14');
+  out(`Sessions:          ${c.totalSessions || 0}`, 'size=13');
+  out(`Messages:          ${fmt(c.totalMessages || 0)}`, 'size=13');
+  out(`Active Days:       ${actDays}/wk`, 'size=13');
+  out(`Since:             ${since}`, 'size=13');
   out('---');
 
   // ── Actions ────────────────────────────────────────
