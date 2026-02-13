@@ -233,56 +233,69 @@ function main() {
     : [];
 
   // ══════════════════════════════════════════════════
-  // OUTPUT
+  // OUTPUT — Clean system-font layout
   // ══════════════════════════════════════════════════
 
-  // ── Menubar ────────────────────────────────────────
+  // ── Menubar line ───────────────────────────────────
   const activeInd = liveActive > 0 ? ' *' : '';
-  out(`CF ${pct}%${activeInd}`, `font=Menlo size=12 color=${col}`);
+  out(`CF ${pct}%${activeInd}`, `size=13 color=${col}`);
   out('---');
 
-  // ── Hero: Progress bar ─────────────────────────────
-  const barW = 25;
-  const filled = Math.round(Math.min(pct, 100) / 100 * barW);
-  const bar = '\u2588'.repeat(filled) + '\u2591'.repeat(barW - filled);
-  out(bar, `font=Menlo size=14 color=${col}`);
-  out(`${fmt(tokens)} / ${fmt(ti.daily)}  \u00b7  ${pct}% used`, 'font=Menlo size=12');
+  // ── Usage header ───────────────────────────────────
+  out(`${pct}% of Daily Budget`, 'size=15');
+  out(`${fmt(tokens)} of ${fmt(ti.daily)} tokens used`, 'size=12 color=#888');
   out('---');
 
-  // ── Today compact ──────────────────────────────────
-  out(`\u2709 ${msgs}    \u25C8 ${sess}    \u2692 ${tools}`, 'font=Menlo size=12');
-  out(`~${fmt(rem)} remaining`, `font=Menlo size=11 color=${col}`);
+  // ── Today ──────────────────────────────────────────
+  const W = 18; // column width for alignment
+  const pad = (label) => label + ' '.repeat(Math.max(W - label.length, 1));
+
+  out('Today', 'size=13 color=#888');
+  out(`${pad('Messages')}${msgs}`, 'size=13 font=Menlo');
+  out(`${pad('Sessions')}${sess}`, 'size=13 font=Menlo');
+  out(`${pad('Tool Calls')}${tools}`, 'size=13 font=Menlo');
+  out(`${pad('Remaining')}${fmt(rem)}`, 'size=13 font=Menlo');
   if (liveActive > 0) {
-    out(`\u25CF ${liveActive} active session${liveActive > 1 ? 's' : ''} (live)`, 'font=Menlo size=10 color=#3fb950');
+    out(`${pad('Active Now')}${liveActive}`, 'size=13 font=Menlo color=#3fb950');
   }
+  out('---');
+
+  // ── Models ─────────────────────────────────────────
   if (models.length > 0) {
+    out('Models', 'size=13 color=#888');
     for (const m of models) {
-      const mPct = ti.daily > 0 ? Math.round(m.tok / ti.daily * 100) : 0;
-      const mBar = '\u2588'.repeat(Math.max(Math.round(mPct / 10), m.tok > 0 ? 1 : 0));
-      out(`  ${m.name}  ${fmt(m.tok)}  ${mBar}`, `font=Menlo size=10 color=#999`);
+      const mPct = ti.daily > 0 ? (m.tok / ti.daily * 100).toFixed(1) : '0';
+      out(`${pad(m.name)}${fmt(m.tok)}  (${mPct}%)`, 'size=13 font=Menlo');
     }
+    out('---');
   }
+
+  // ── This Week ──────────────────────────────────────
+  out('This Week', 'size=13 color=#888');
+  out(`${pad('Total')}${fmt(wkTot)}`, 'size=13 font=Menlo');
+  out(`${pad('Daily Average')}${fmt(wkAvg)}`, 'size=13 font=Menlo');
+  out(`${pad('Peak Day')}${fmt(peak.tok)} (${peak.date.slice(5)})`, 'size=13 font=Menlo');
+  out(`${pad('Trend')}${trendWord}`, `size=13 font=Menlo color=${trendCol}`);
   out('---');
 
-  // ── Week ───────────────────────────────────────────
-  out(`7d  ${fmt(wkTot)} total  \u00b7  ${fmt(wkAvg)}/day`, 'font=Menlo size=12');
-  out(`Peak ${fmt(peak.tok)} (${peak.date.slice(5)})  \u00b7  ${trendIcon} ${trendWord}`, `font=Menlo size=11 color=${trendCol}`);
-  out(sparkStr, 'font=Menlo size=13');
+  // ── History sparkline ──────────────────────────────
+  out(sparkStr, 'font=Menlo size=14');
   out('---');
 
-  // ── Activity ───────────────────────────────────────
-  out(`Peak  ${topHrs}  \u00b7  ${actDays}d/wk`, 'font=Menlo size=11');
-  out('---');
-
-  // ── All-time (muted footer) ────────────────────────
+  // ── All Time ───────────────────────────────────────
   const since = (c.firstSessionDate || '').slice(0, 10);
-  out(`${c.totalSessions || 0} sessions \u00b7 ${fmt(c.totalMessages || 0)} msgs \u00b7 since ${since}`, 'size=10 color=#999');
+  out('All Time', 'size=13 color=#888');
+  out(`${pad('Sessions')}${c.totalSessions || 0}`, 'size=13 font=Menlo');
+  out(`${pad('Messages')}${fmt(c.totalMessages || 0)}`, 'size=13 font=Menlo');
+  out(`${pad('Active Days')}${actDays}/wk`, 'size=13 font=Menlo');
+  out(`${pad('Since')}${since}`, 'size=13 font=Menlo');
   out('---');
 
   // ── Actions ────────────────────────────────────────
   out('Open Dashboard', `bash=/opt/homebrew/bin/node param1=${CLI} param2=dashboard param3=--open terminal=false`);
   out('Refresh', 'refresh=true');
-  out(`\u2500\u2500  ${ti.label}  \u2500\u2500`, 'size=10 color=#aaa');
+  out('---');
+  out(`${ti.label}`, 'size=11 color=#aaa');
 }
 
 main();
