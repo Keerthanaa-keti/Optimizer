@@ -81,7 +81,14 @@ async function runSingleTask(
     }
   } else {
     updateTaskStatus(db, taskId, 'failed');
-    console.error(`\nTask failed: ${result.error}`);
+    console.error(`\nTask failed: ${result.error || '(no error message)'}`);
+    console.error(`Exit code: ${result.execution.exitCode}`);
+    if (result.execution.stdout) {
+      console.error(`Stdout (last 500 chars): ${result.execution.stdout.slice(-500)}`);
+    }
+    if (result.execution.stderr) {
+      console.error(`Stderr (last 500 chars): ${result.execution.stderr.slice(-500)}`);
+    }
   }
 }
 

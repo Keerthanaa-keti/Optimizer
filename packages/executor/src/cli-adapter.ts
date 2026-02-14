@@ -23,7 +23,7 @@ export interface CliOptions {
 const DEFAULT_OPTIONS: CliOptions = {
   model: 'sonnet',
   maxBudgetUsd: 0.50,
-  timeoutMs: 5 * 60 * 1000, // 5 minutes per task
+  timeoutMs: 10 * 60 * 1000, // 10 minutes per task
   claudePath: 'claude',
   allowedTools: ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'Bash(git:*)'],
 };
@@ -71,11 +71,12 @@ export class CliAdapter {
 
       const proc = spawn(this.options.claudePath, args, {
         cwd: projectPath,
-        env: {
-          ...process.env,
-          // Ensure Claude doesn't try to use interactive mode
-          CI: 'true',
-        },
+        env: (() => {
+          const env: Record<string, string | undefined> = { ...process.env, CI: 'true' };
+          // Allow spawning Claude CLI from within a Claude Code session
+          delete env.CLAUDECODE;
+          return env;
+        })(),
         timeout: this.options.timeoutMs,
       });
 
