@@ -8,7 +8,7 @@
     "apps/*"
   ],
   "scripts": {
-    "build": "npm run build -w packages/core -w packages/db -w packages/executor -w packages/scanner -w packages/token-monitor -w apps/dashboard -w apps/cli -w apps/menubar",
+    "build": "npm run build -w packages/core -w packages/db -w packages/executor -w packages/scanner -w packages/token-monitor -w packages/intelligence -w apps/dashboard -w apps/cli -w apps/menubar",
     "clean": "rm -rf packages/*/dist apps/*/dist packages/*/tsconfig.tsbuildinfo apps/*/tsconfig.tsbuildinfo",
     "creditforge": "node apps/cli/dist/index.js"
   },

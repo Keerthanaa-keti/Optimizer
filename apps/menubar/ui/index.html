@@ -65,6 +65,33 @@
     <!-- Alerts -->
     <div id="alerts-container"></div>
 
+    <!-- Night Mode Section -->
+    <div class="section-title">Night Mode</div>
+    <div class="divider"></div>
+    <div id="nightmode-section" class="nightmode-section">
+      <div class="nm-row">
+        <span class="nm-label">Status</span>
+        <span class="nm-value" id="nm-status">--</span>
+      </div>
+      <div class="nm-row">
+        <span class="nm-label">Next run</span>
+        <span class="nm-value" id="nm-next-run">--</span>
+      </div>
+      <div class="nm-row">
+        <span class="nm-label">Queued tasks</span>
+        <span class="nm-value nm-highlight" id="nm-queued">0</span>
+      </div>
+      <div class="nm-row">
+        <span class="nm-label">Today</span>
+        <span class="nm-value" id="nm-today">--</span>
+      </div>
+      <div id="nm-top-tasks" class="nm-tasks" style="display: none">
+        <div class="nm-tasks-title">Top queued tasks</div>
+        <div id="nm-task-list"></div>
+      </div>
+    </div>
+    <div class="divider"></div>
+
     <!-- Model breakdown -->
     <div id="model-breakdown" class="model-section"></div>
 
@@ -77,6 +104,44 @@
       <div class="activity-row" id="active-sessions-row" style="display: none">
         <span class="active-dot"></span>
         <span id="active-sessions-text">0 active sessions</span>
+      </div>
+    </div>
+    <div class="divider"></div>
+
+    <!-- Morning Report -->
+    <div id="report-section" style="display: none">
+      <div class="section-title">Morning Report</div>
+      <div class="report-content" id="report-content"></div>
+      <div class="divider"></div>
+    </div>
+
+    <!-- Insights Section -->
+    <div class="section-title">Insights</div>
+    <div class="divider"></div>
+    <div id="insights-section" class="insights-section">
+      <!-- Subscription Value Meter -->
+      <div class="utilization-meter">
+        <div class="utilization-pct" id="ins-util-pct">--</div>
+        <div class="utilization-context" id="ins-util-context"></div>
+        <div class="waste-callout" id="ins-waste" style="display: none"></div>
+      </div>
+
+      <!-- Smart Action Card -->
+      <div class="action-card" id="ins-action-card">
+        <div class="action-headline" id="ins-action-headline">--</div>
+        <div class="action-detail" id="ins-action-detail"></div>
+      </div>
+
+      <!-- Quick Stats Row -->
+      <div class="quick-stats">
+        <div class="quick-stat">
+          <span class="quick-stat-value" id="ins-burn-rate">--</span>
+          <span class="quick-stat-label">burn rate</span>
+        </div>
+        <div class="quick-stat" id="ins-best-window-stat" style="display: none">
+          <span class="quick-stat-value" id="ins-best-window">--</span>
+          <span class="quick-stat-label">best window</span>
+        </div>
       </div>
     </div>
     <div class="divider"></div>

@@ -4,6 +4,7 @@ import path from 'node:path';
 import type { Task, Execution, BatchPlan } from '@creditforge/core';
 import { CliAdapter, type CliOptions } from './cli-adapter.js';
 import { NightPlanner, type NightPlannerConfig } from './night-planner.js';
+import { routeModel, getHistoricalStats, type HistoricalStats, type ModelChoice } from './model-router.js';
 
 export interface ExecutorConfig {
   cli: Partial<CliOptions>;
@@ -17,6 +18,7 @@ export interface ExecutionResult {
   execution: Omit<Execution, 'id'>;
   success: boolean;
   error?: string;
+  modelChoice?: ModelChoice;
 }
 
 const DEFAULT_CONFIG: ExecutorConfig = {
@@ -45,26 +47,47 @@ export class Executor {
   }
 
   /**
-   * Execute a single task.
+   * Execute a single task with smart model routing.
    */
-  async executeTask(task: Task): Promise<ExecutionResult> {
+  async executeTask(task: Task, history?: HistoricalStats[]): Promise<ExecutionResult> {
     const branch = this.planner.getBranchName();
     const projectPath = task.projectPath.replace(/^~/, process.env.HOME ?? '');
+
+    // Route to best model (or skip if task type consistently fails)
+    const modelChoice = routeModel(task, history, this.config.cli.model);
+
+    if (modelChoice.model === 'skip') {
+      return {
+        task,
+        execution: this.makeSkippedExecution(task, branch, modelChoice.reason),
+        success: false,
+        error: modelChoice.reason,
+        modelChoice,
+      };
+    }
 
     if (this.config.dryRun) {
       return {
         task,
         execution: this.makeDryRunExecution(task, branch),
         success: true,
+        modelChoice,
       };
     }
+
+    // Create a task-specific CLI adapter with the routed model
+    const taskCli = new CliAdapter({
+      ...this.config.cli,
+      model: modelChoice.model,
+      maxBudgetUsd: modelChoice.maxBudgetUsd,
+    });
 
     // Ensure nightmode branch exists (only for real execution)
     this.ensureBranch(projectPath, branch);
 
     try {
-      const result = await this.cli.execute(task);
-      const execution = this.cli.toExecution(task, result, branch);
+      const result = await taskCli.execute(task);
+      const execution = taskCli.toExecution(task, result, branch);
 
       // If execution succeeded, commit changes
       if (result.exitCode === 0) {
@@ -82,6 +105,7 @@ export class Executor {
         execution,
         success: result.exitCode === 0,
         error: result.exitCode !== 0 ? result.stderr : undefined,
+        modelChoice,
       };
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
@@ -90,22 +114,25 @@ export class Executor {
         execution: this.makeErrorExecution(task, branch, error),
         success: false,
         error,
+        modelChoice,
       };
     }
   }
 
   /**
-   * Execute a batch plan (night mode).
+   * Execute a batch plan (night mode) with smart model routing.
    */
   async executeBatch(
     plan: BatchPlan,
     onProgress?: (completed: number, total: number, result: ExecutionResult) => void,
+    db?: any,
   ): Promise<ExecutionResult[]> {
     const results: ExecutionResult[] = [];
+    const history = db ? getHistoricalStats(db) : [];
 
     for (let i = 0; i < plan.tasks.length; i++) {
       const task = plan.tasks[i];
-      const result = await this.executeTask(task);
+      const result = await this.executeTask(task, history);
       results.push(result);
 
       onProgress?.(i + 1, plan.tasks.length, result);
@@ -147,7 +174,8 @@ export class Executor {
     if (succeeded.length > 0) {
       lines.push('## Completed Tasks');
       for (const r of succeeded) {
-        lines.push(`- [${r.task.projectName}] ${r.task.title} ($${(r.execution.costUsdCents / 100).toFixed(2)})`);
+        const modelLabel = r.modelChoice ? ` [${r.modelChoice.model}]` : '';
+        lines.push(`- [${r.task.projectName}]${modelLabel} ${r.task.title} ($${(r.execution.costUsdCents / 100).toFixed(2)})`);
         if (r.execution.commitHash) {
           lines.push(`  Branch: ${r.execution.branch} | Commit: ${r.execution.commitHash.slice(0, 8)}`);
         }
@@ -155,9 +183,20 @@ export class Executor {
       lines.push('');
     }
 
+    const skipped = results.filter(r => r.modelChoice?.model === 'skip');
+    if (skipped.length > 0) {
+      lines.push('## Skipped Tasks (low success rate)');
+      for (const r of skipped) {
+        lines.push(`- [${r.task.projectName}] ${r.task.title}`);
+        lines.push(`  ${r.modelChoice?.reason}`);
+      }
+      lines.push('');
+    }
+
     if (failed.length > 0) {
       lines.push('## Failed Tasks');
       for (const r of failed) {
+        if (r.modelChoice?.model === 'skip') continue; // Already shown above
         lines.push(`- [${r.task.projectName}] ${r.task.title}`);
         if (r.error) {
           lines.push(`  Error: ${r.error.slice(0, 200)}`);
@@ -298,6 +337,24 @@ export class Executor {
     };
   }
 
+  private makeSkippedExecution(task: Task, branch: string, reason: string): Omit<Execution, 'id'> {
+    return {
+      taskId: task.id!,
+      model: 'skipped',
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0,
+      costUsdCents: 0,
+      durationMs: 0,
+      exitCode: -1,
+      stdout: '',
+      stderr: reason,
+      branch,
+      startedAt: new Date().toISOString(),
+      completedAt: new Date().toISOString(),
+    };
+  }
+
   private makeErrorExecution(task: Task, branch: string, error: string): Omit<Execution, 'id'> {
     return {
       taskId: task.id!,
@@ -319,3 +376,5 @@ export class Executor {
 
 export { CliAdapter } from './cli-adapter.js';
 export { NightPlanner } from './night-planner.js';
+export { routeModel, getHistoricalStats } from './model-router.js';
+export type { ModelChoice, HistoricalStats } from './model-router.js';

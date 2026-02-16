@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import path from 'node:path';
 import fs from 'node:fs';
 import { up as migration001 } from './migrations/001_initial.js';
+import { up as migration002 } from './migrations/002_intelligence.js';
 
 const DEFAULT_DB_DIR = path.join(
   process.env.HOME ?? '~',
@@ -48,7 +49,7 @@ function runMigrations(db: Database.Database): void {
     currentVersion = row?.version ?? 0;
   }
 
-  const migrations = [migration001];
+  const migrations = [migration001, migration002];
 
   for (let i = currentVersion; i < migrations.length; i++) {
     db.transaction(() => {
@@ -62,3 +63,4 @@ export * from './queries/projects.js';
 export * from './queries/tasks.js';
 export * from './queries/executions.js';
 export * from './queries/ledger.js';
+export * from './queries/intelligence.js';

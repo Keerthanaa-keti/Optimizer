@@ -15,6 +15,7 @@
     "@creditforge/scanner": "*",
     "@creditforge/executor": "*",
     "@creditforge/token-monitor": "*",
+    "@creditforge/intelligence": "*",
     "@creditforge/dashboard": "*"
   }
 }

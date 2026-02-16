@@ -12,6 +12,7 @@
     { "path": "../../packages/scanner" },
     { "path": "../../packages/executor" },
     { "path": "../../packages/token-monitor" },
+    { "path": "../../packages/intelligence" },
     { "path": "../dashboard" }
   ]
 }

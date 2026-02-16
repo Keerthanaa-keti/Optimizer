@@ -1,21 +1,20 @@
 import { app, ipcMain, shell, nativeTheme, nativeImage, Tray } from 'electron';
 import { menubar } from 'menubar';
 import path from 'node:path';
-import fs from 'node:fs';
-import { getUsageData } from './data.js';
+import { getUsageData, getNightModeStatus, getMorningReport, getIntelligenceData } from './data.js';
 import { getAlerts } from './alerts.js';
+import { startServer } from '@creditforge/dashboard';
 
 const WINDOW_WIDTH = 400;
-const WINDOW_HEIGHT = 650;
+const WINDOW_HEIGHT = 720;
 const REFRESH_INTERVAL_MS = 30_000;
+const DASHBOARD_PORT = 3141;
 
 let refreshTimer: ReturnType<typeof setInterval> | null = null;
+let dashboardServer: ReturnType<typeof startServer> | null = null;
 
 function createMenubar() {
-  const iconPath = path.join(__dirname, '..', 'assets', 'iconTemplate.png');
   const indexPath = path.join(__dirname, '..', 'ui', 'index.html');
-
-  console.log('[CreditForge] Index path:', indexPath, 'exists:', fs.existsSync(indexPath));
 
   // Create menubar icon: 22x22 gauge/meter as nativeImage
   const size = 22;
@@ -37,18 +36,22 @@ function createMenubar() {
 
   // Register IPC handlers BEFORE creating menubar (preloadWindow triggers early loads)
   ipcMain.handle('get-usage-data', () => getUsageData());
-  ipcMain.handle('get-alerts', (_event, usageJson: string) => {
-    return getAlerts(JSON.parse(usageJson));
+  ipcMain.handle('get-alerts', (_event, usageJson: string, burnRateJson?: string) => {
+    const burnRate = burnRateJson ? JSON.parse(burnRateJson) : undefined;
+    return getAlerts(JSON.parse(usageJson), burnRate);
   });
   ipcMain.handle('get-theme', () => nativeTheme.shouldUseDarkColors ? 'dark' : 'light');
   ipcMain.handle('open-dashboard', () => {
     shell.openExternal('http://localhost:3141');
   });
+  ipcMain.handle('get-nightmode-status', () => getNightModeStatus());
+  ipcMain.handle('get-morning-report', () => getMorningReport());
+  ipcMain.handle('get-intelligence', () => getIntelligenceData());
 
   const tray = new Tray(icon);
   tray.setToolTip('CreditForge');
 
-  // Show text label in menubar (visible even if icon is small)
+  // Show text label in menubar
   try {
     const data = getUsageData();
     tray.setTitle(` CF ${data.sessionPct}%`);
@@ -86,7 +89,9 @@ function createMenubar() {
     setInterval(() => {
       try {
         const data = getUsageData();
-        tray.setTitle(` CF ${data.sessionPct}%`);
+        const nmStatus = getNightModeStatus();
+        const queueLabel = nmStatus.queuedTasks > 0 ? ` [${nmStatus.queuedTasks}]` : '';
+        tray.setTitle(` CF ${data.sessionPct}%${queueLabel}`);
       } catch { /* ignore */ }
     }, REFRESH_INTERVAL_MS);
 
@@ -97,7 +102,6 @@ function createMenubar() {
   });
 
   mb.on('after-show', () => {
-    console.log('[CreditForge] Popup shown');
     mb.window?.webContents.send('refresh');
 
     if (refreshTimer) clearInterval(refreshTimer);
@@ -117,7 +121,13 @@ function createMenubar() {
 }
 
 app.on('ready', () => {
-  console.log('[CreditForge] App ready, creating menubar...');
+  console.log('[CreditForge] App ready, starting dashboard server...');
+  try {
+    dashboardServer = startServer(DASHBOARD_PORT);
+  } catch (err) {
+    console.log('[CreditForge] Dashboard server failed (port may be in use):', err);
+  }
+  console.log('[CreditForge] Creating menubar...');
   createMenubar();
 });
 

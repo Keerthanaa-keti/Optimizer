@@ -80,12 +80,133 @@ function renderAlerts(alerts) {
   `).join('');
 }
 
+function renderNightMode(nm) {
+  // Status
+  $('nm-status').textContent = nm.isEnabled ? 'Enabled' : 'Disabled';
+  $('nm-status').className = 'nm-value ' + (nm.isEnabled ? 'nm-enabled' : 'nm-disabled');
+
+  // Next run
+  $('nm-next-run').textContent = nm.isEnabled ? nm.nextRunAt : '--';
+
+  // Queued
+  $('nm-queued').textContent = nm.queuedTasks;
+
+  // Today's results
+  if (nm.completedToday > 0 || nm.failedToday > 0) {
+    const spent = (nm.totalSpentToday / 100).toFixed(2);
+    $('nm-today').textContent = `${nm.completedToday} done, ${nm.failedToday} failed ($${spent})`;
+  } else {
+    $('nm-today').textContent = 'No runs today';
+  }
+
+  // Top tasks
+  const taskList = $('nm-task-list');
+  const taskContainer = $('nm-top-tasks');
+  if (nm.topTasks && nm.topTasks.length > 0) {
+    taskContainer.style.display = 'block';
+    taskList.innerHTML = nm.topTasks.map(t =>
+      `<div class="nm-task-row">
+        <span class="nm-task-name" title="${t.title}">${t.project}: ${truncate(t.title, 35)}</span>
+        <span class="nm-task-score">${t.score.toFixed(1)}</span>
+      </div>`
+    ).join('');
+  } else {
+    taskContainer.style.display = 'none';
+  }
+}
+
+function renderReport(report) {
+  const section = $('report-section');
+  if (!report || !report.exists) {
+    section.style.display = 'none';
+    return;
+  }
+
+  section.style.display = 'block';
+  // Parse markdown report into simple HTML
+  const lines = report.content.split('\n').slice(0, 15); // First 15 lines
+  const html = lines.map(line => {
+    if (line.startsWith('# ')) return `<div class="report-h1">${line.slice(2)}</div>`;
+    if (line.startsWith('## ')) return `<div class="report-h2">${line.slice(3)}</div>`;
+    if (line.startsWith('- ')) return `<div class="report-item">${line}</div>`;
+    if (line.trim() === '') return '';
+    return `<div class="report-line">${line}</div>`;
+  }).join('');
+  $('report-content').innerHTML = html;
+}
+
+function renderInsights(ins) {
+  if (!ins || !ins.actionable) return;
+
+  const a = ins.actionable;
+
+  // Utilization meter
+  const pctEl = $('ins-util-pct');
+  pctEl.textContent = `${a.utilizationPct}% utilized`;
+  if (a.utilizationPct >= 70) {
+    pctEl.className = 'utilization-pct util-green';
+  } else if (a.utilizationPct >= 40) {
+    pctEl.className = 'utilization-pct util-yellow';
+  } else {
+    pctEl.className = 'utilization-pct util-red';
+  }
+
+  // Dollar context — show in terms of actual subscription cost, not compute cost
+  const weeklySub = a.subscriptionCostWeekly;
+  const usedOfSub = Math.round(weeklySub * a.utilizationPct) / 100;
+  const wastedOfSub = Math.max(weeklySub - usedOfSub, 0);
+  $('ins-util-context').textContent =
+    `~$${usedOfSub.toFixed(0)} of your $${Math.round(weeklySub)}/week subscription used`;
+
+  // Waste callout (only when >50% unused)
+  const wasteEl = $('ins-waste');
+  if (a.utilizationPct < 50 && wastedOfSub > 2) {
+    wasteEl.textContent = `~$${wastedOfSub.toFixed(0)}/week going unused`;
+    wasteEl.style.display = 'block';
+  } else {
+    wasteEl.style.display = 'none';
+  }
+
+  // Action card
+  const card = $('ins-action-card');
+  card.className = 'action-card action-' + a.action.urgency;
+  $('ins-action-headline').textContent = a.action.headline;
+  $('ins-action-detail').textContent = a.action.detail;
+
+  // Quick stats — burn rate
+  $('ins-burn-rate').textContent = `$${a.burnRatePerHr.toFixed(2)}/hr`;
+
+  // Quick stats — best window
+  const windowStat = $('ins-best-window-stat');
+  if (a.bestWindow) {
+    windowStat.style.display = 'flex';
+    $('ins-best-window').textContent = a.bestWindow;
+  } else {
+    windowStat.style.display = 'none';
+  }
+}
+
+function truncate(str, len) {
+  return str.length > len ? str.slice(0, len) + '...' : str;
+}
+
 async function refresh() {
   try {
     const data = await window.creditforge.getUsageData();
     renderUsage(data);
 
-    const alerts = await window.creditforge.getAlerts(JSON.stringify(data));
+    const nm = await window.creditforge.getNightModeStatus();
+    renderNightMode(nm);
+
+    const report = await window.creditforge.getMorningReport();
+    renderReport(report);
+
+    const intelligence = await window.creditforge.getIntelligence();
+    renderInsights(intelligence);
+
+    // Pass burn rate to alerts for predictive messaging
+    const burnRateJson = intelligence?.burnRate ? JSON.stringify(intelligence.burnRate) : undefined;
+    const alerts = await window.creditforge.getAlerts(JSON.stringify(data), burnRateJson);
     renderAlerts(alerts);
   } catch (err) {
     console.error('Refresh failed:', err);

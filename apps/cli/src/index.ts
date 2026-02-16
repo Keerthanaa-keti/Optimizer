@@ -6,6 +6,8 @@ import { runStatus } from './status.js';
 import { runTokens } from './tokens.js';
 import { runOptimize } from './optimize.js';
 import { runDashboard } from './dashboard.js';
+import { runReport } from './report.js';
+import { runInsights } from './insights.js';
 
 const USAGE = `
 CreditForge - Claude Subscription Optimizer
@@ -19,6 +21,10 @@ Usage:
   creditforge tokens [--json]                Show real token usage from Claude
   creditforge optimize [--dry-run] [--yes]   Scan, plan, approve, and execute
   creditforge dashboard [--port N] [--open]  Launch web dashboard
+  creditforge report [--json] [--date YYYY]  Morning report
+  creditforge insights [--json]              Intelligence report (burn rate, patterns)
+  creditforge insights --burn-rate           Show burn rate only
+  creditforge insights --recommendations     Show model recommendations only
   creditforge app                            Launch menubar app
 
 Options:
@@ -60,6 +66,14 @@ async function main(): Promise<void> {
 
     case 'dashboard':
       await runDashboard(args.slice(1));
+      break;
+
+    case 'report':
+      await runReport(args.slice(1));
+      break;
+
+    case 'insights':
+      await runInsights(args.slice(1));
       break;
 
     case 'app': {

@@ -1,9 +1,11 @@
 /**
  * Pacing intelligence engine — smart alerts based on usage patterns.
  * Calculates burn rate, time-to-limit, and model suggestions.
+ * Enhanced with burn rate predictions from intelligence layer.
  */
 
 import type { MenubarUsageData } from './data.js';
+import type { BurnRateSnapshot } from '@creditforge/intelligence';
 
 export type AlertLevel = 'info' | 'success' | 'warning' | 'danger';
 
@@ -15,16 +17,19 @@ export interface PacingAlert {
 
 /**
  * Generate smart alerts based on current usage data.
+ * Optionally enhanced with burn rate predictions.
  */
-export function getAlerts(usage: MenubarUsageData): PacingAlert[] {
+export function getAlerts(usage: MenubarUsageData, burnRate?: BurnRateSnapshot): PacingAlert[] {
   const alerts: PacingAlert[] = [];
 
-  // Session-based alerts
-  const sessionAlert = getSessionAlert(usage);
+  // Burn-rate-enhanced session alert (or fallback to basic)
+  const sessionAlert = burnRate
+    ? getBurnRateAlert(usage, burnRate)
+    : getSessionAlert(usage);
   if (sessionAlert) alerts.push(sessionAlert);
 
   // Weekly budget alert
-  const weeklyAlert = getWeeklyAlert(usage);
+  const weeklyAlert = getWeeklyAlert(usage, burnRate);
   if (weeklyAlert) alerts.push(weeklyAlert);
 
   // Model suggestion
@@ -32,6 +37,51 @@ export function getAlerts(usage: MenubarUsageData): PacingAlert[] {
   if (modelAlert) alerts.push(modelAlert);
 
   return alerts;
+}
+
+function getBurnRateAlert(usage: MenubarUsageData, br: BurnRateSnapshot): PacingAlert | null {
+  const resetMs = usage.sessionResetAtMs - Date.now();
+  const resetMins = Math.max(0, Math.floor(resetMs / 60000));
+  const resetH = Math.floor(resetMins / 60);
+  const resetM = resetMins % 60;
+  const countdown = resetH > 0 ? `${resetH}hr ${resetM}min` : `${resetM}min`;
+
+  if (br.risk === 'critical') {
+    const ttl = br.sessionTimeToLimit === Infinity
+      ? ''
+      : ` Limit in ~${br.sessionTimeToLimit}min.`;
+    return {
+      level: 'danger',
+      title: 'Critical burn rate',
+      message: `$${br.sessionBurnRate.toFixed(2)}/hr.${ttl} Session resets in ${countdown}. Save Opus for critical work.`,
+    };
+  }
+
+  if (br.risk === 'warning') {
+    return {
+      level: 'warning',
+      title: 'High burn rate',
+      message: `$${br.sessionBurnRate.toFixed(2)}/hr — projected ${br.sessionProjectedPct}% by window end. Resets in ${countdown}.`,
+    };
+  }
+
+  if (br.risk === 'caution') {
+    return {
+      level: 'info',
+      title: 'Moderate pace',
+      message: `$${br.sessionBurnRate.toFixed(2)}/hr — ${br.sessionProjectedPct}% projected. ${countdown} remaining.`,
+    };
+  }
+
+  if (usage.sessionPct < 20) {
+    return {
+      level: 'success',
+      title: 'Plenty of capacity',
+      message: `$${br.sessionBurnRate.toFixed(2)}/hr. Good time for heavy Opus tasks.`,
+    };
+  }
+
+  return null;
 }
 
 function getSessionAlert(usage: MenubarUsageData): PacingAlert | null {
@@ -50,9 +100,7 @@ function getSessionAlert(usage: MenubarUsageData): PacingAlert | null {
     };
   }
 
-  if (pct < 40) {
-    return null; // No alert needed — cruising
-  }
+  if (pct < 40) return null;
 
   if (pct < 60) {
     return {
@@ -77,12 +125,10 @@ function getSessionAlert(usage: MenubarUsageData): PacingAlert | null {
   };
 }
 
-function getWeeklyAlert(usage: MenubarUsageData): PacingAlert | null {
+function getWeeklyAlert(usage: MenubarUsageData, burnRate?: BurnRateSnapshot): PacingAlert | null {
   const pct = usage.weeklyPct;
-
   if (pct < 70) return null;
 
-  // Estimate days remaining until weekly reset (Saturday)
   const now = new Date();
   const dayOfWeek = now.getDay();
   const daysLeft = (6 - dayOfWeek + 7) % 7 || 7;
@@ -95,10 +141,15 @@ function getWeeklyAlert(usage: MenubarUsageData): PacingAlert | null {
     };
   }
 
+  // Enhanced: show projected weekly % if burn rate data available
+  const projection = burnRate
+    ? ` Projected ${burnRate.weeklyProjectedPct}% at reset.`
+    : '';
+
   return {
     level: 'warning',
     title: 'Weekly budget alert',
-    message: `${pct}% used with ${daysLeft} day${daysLeft !== 1 ? 's' : ''} until reset.`,
+    message: `${pct}% used with ${daysLeft} day${daysLeft !== 1 ? 's' : ''} until reset.${projection}`,
   };
 }
 
@@ -107,7 +158,6 @@ function getModelSuggestion(usage: MenubarUsageData): PacingAlert | null {
   const totalCost = usage.data.session.cost;
   if (totalCost === 0) return null;
 
-  // Calculate Opus percentage of session cost
   let opusCost = 0;
   for (const [model, cost] of Object.entries(byModel)) {
     if (model.includes('opus')) {

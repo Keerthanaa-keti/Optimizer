@@ -10,6 +10,8 @@
   },
   "dependencies": {
     "@creditforge/token-monitor": "*",
+    "@creditforge/intelligence": "*",
+    "@creditforge/dashboard": "*",
     "menubar": "^9.4.0"
   },
   "devDependencies": {
