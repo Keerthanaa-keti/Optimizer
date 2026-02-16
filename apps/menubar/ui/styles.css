@@ -688,3 +688,125 @@ body {
 .toast-error {
   background: #ff3b30;
 }
+
+/* ─── Results Panel ──────────────────────────────────── */
+
+.nm-results {
+  margin-top: 8px;
+  padding: 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.nm-results-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.nm-results-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.nm-results-close {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+  border-radius: 3px;
+}
+
+.nm-results-close:hover {
+  background: var(--border);
+  color: var(--text);
+}
+
+.results-stat-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.results-stat {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.results-stat strong {
+  color: var(--text);
+  font-size: 14px;
+}
+
+.results-error {
+  color: var(--bar-red);
+  font-size: 12px;
+}
+
+.results-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 8px 0 4px;
+}
+
+.results-hint {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+.results-kv-group {
+  margin-bottom: 4px;
+}
+
+.results-kv {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  padding: 2px 0;
+  color: var(--text-secondary);
+}
+
+.results-kv span:last-child {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.results-mono {
+  font-family: 'SF Mono', 'Menlo', monospace;
+  font-size: 10px !important;
+}
+
+.results-task {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  font-size: 11px;
+}
+
+.results-task-score {
+  font-family: 'SF Mono', 'Menlo', monospace;
+  font-size: 10px;
+  color: var(--accent);
+  min-width: 24px;
+  font-weight: 600;
+}
+
+.results-task-name {
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

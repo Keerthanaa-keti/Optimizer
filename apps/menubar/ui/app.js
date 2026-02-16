@@ -273,6 +273,116 @@ async function refresh() {
   }
 }
 
+// ─── Results Panel ──────────────────────────────────────
+
+function showResults(title, bodyHtml) {
+  $('nm-results-title').textContent = title;
+  $('nm-results-body').innerHTML = bodyHtml;
+  $('nm-results').style.display = 'block';
+}
+
+function hideResults() {
+  $('nm-results').style.display = 'none';
+}
+
+function parseScanOutput(stdout) {
+  const lines = stdout.split('\n');
+  let html = '';
+
+  // Extract summary numbers
+  const totalMatch = stdout.match(/Total tasks discovered:\s*(\d+)/);
+  const projectsMatch = stdout.match(/Projects scanned:\s*(\d+)/);
+  const errorsMatch = stdout.match(/Errors:\s*(\d+)/);
+
+  if (totalMatch) {
+    html += `<div class="results-stat-row">`;
+    html += `<span class="results-stat"><strong>${totalMatch[1]}</strong> tasks</span>`;
+    if (projectsMatch) html += `<span class="results-stat"><strong>${projectsMatch[1]}</strong> projects</span>`;
+    if (errorsMatch && errorsMatch[1] !== '0') html += `<span class="results-stat results-error"><strong>${errorsMatch[1]}</strong> errors</span>`;
+    html += `</div>`;
+  }
+
+  // Extract by-source breakdown
+  const sourceSection = stdout.match(/By source:\n([\s\S]*?)(?:\nBy category:|\nTop)/);
+  if (sourceSection) {
+    const sourceLines = sourceSection[1].trim().split('\n').filter(l => l.trim());
+    if (sourceLines.length > 0) {
+      html += `<div class="results-label">By source</div>`;
+      html += sourceLines.map(l => {
+        const m = l.trim().match(/^(.+?):\s*(\d+)$/);
+        return m ? `<div class="results-kv"><span>${m[1]}</span><span>${m[2]}</span></div>` : '';
+      }).join('');
+    }
+  }
+
+  // Extract top tasks
+  const topSection = stdout.match(/Top \d+ tasks by score:\n([\s\S]*?)$/);
+  if (topSection) {
+    const taskLines = topSection[1].trim().split('\n').filter(l => l.trim()).slice(0, 5);
+    if (taskLines.length > 0) {
+      html += `<div class="results-label">Top tasks</div>`;
+      html += taskLines.map(l => {
+        const m = l.trim().match(/^\d+\.\s*\[([^\]]+)\]\s*(.+?)\s*\|\s*(.+)$/);
+        if (!m) return '';
+        return `<div class="results-task"><span class="results-task-score">${m[1]}</span><span class="results-task-name">${m[2]}: ${truncate(m[3], 28)}</span></div>`;
+      }).join('');
+    }
+  }
+
+  return html || `<div class="results-label">No tasks found</div>`;
+}
+
+function parsePlanOutput(stdout) {
+  let html = '';
+
+  // Extract plan summary
+  const planned = stdout.match(/Planned for execution:\s*(\d+)/);
+  const queued = stdout.match(/Queued tasks:\s*(\d+)/);
+  const budget = stdout.match(/Budget cap:\s*(\$[\d.]+)/);
+  const cost = stdout.match(/Estimated cost:\s*(\$[\d.]+)/);
+  const duration = stdout.match(/Estimated duration:\s*~?(.+)/);
+  const branch = stdout.match(/Branch:\s*(.+)/);
+
+  html += `<div class="results-stat-row">`;
+  if (planned) html += `<span class="results-stat"><strong>${planned[1]}</strong> planned</span>`;
+  if (queued) html += `<span class="results-stat">${queued[1]} queued</span>`;
+  html += `</div>`;
+
+  if (budget || cost || duration) {
+    html += `<div class="results-kv-group">`;
+    if (budget) html += `<div class="results-kv"><span>Budget cap</span><span>${budget[1]}</span></div>`;
+    if (cost) html += `<div class="results-kv"><span>Est. cost</span><span>${cost[1]}</span></div>`;
+    if (duration) html += `<div class="results-kv"><span>Est. time</span><span>${duration[1].trim()}</span></div>`;
+    if (branch) html += `<div class="results-kv"><span>Branch</span><span class="results-mono">${branch[1].trim()}</span></div>`;
+    html += `</div>`;
+  }
+
+  // Extract execution order
+  const orderSection = stdout.match(/Execution order:\n([\s\S]*?)(?:\n\[DRY RUN\]|$)/);
+  if (orderSection) {
+    const taskLines = orderSection[1].trim().split('\n').filter(l => l.trim());
+    if (taskLines.length > 0) {
+      html += `<div class="results-label">Tonight's plan</div>`;
+      html += taskLines.map(l => {
+        const m = l.trim().match(/^\d+\.\s*\[([^\]]+)\]\s*(.+?)\s*\|\s*(.+)$/);
+        if (!m) return '';
+        return `<div class="results-task"><span class="results-task-score">${m[1]}</span><span class="results-task-name">${m[2]}: ${truncate(m[3], 28)}</span></div>`;
+      }).join('');
+    }
+  }
+
+  // Handle edge cases
+  if (stdout.includes('Night mode is disabled')) {
+    html = `<div class="results-label">Night mode is disabled in config</div>
+      <div class="results-hint">Enable it in creditforge.toml: enabled = true</div>`;
+  } else if (stdout.includes('No queued tasks')) {
+    html = `<div class="results-label">No queued tasks</div>
+      <div class="results-hint">Run Scan first to discover tasks</div>`;
+  }
+
+  return html || `<div class="results-label">No plan generated</div>`;
+}
+
 // ─── Action Handlers ────────────────────────────────────
 
 function setButtonLoading(btn, loading) {
@@ -284,6 +394,9 @@ function setButtonLoading(btn, loading) {
     btn.textContent = btn.dataset.originalText || btn.textContent;
   }
 }
+
+// Close results panel
+$('nm-results-close').addEventListener('click', hideResults);
 
 // Install launchd agents
 $('btn-install-launchd').addEventListener('click', async () => {
@@ -313,13 +426,11 @@ $('btn-scan').addEventListener('click', async () => {
   try {
     const result = await window.creditforge.runScan();
     if (result.exitCode === 0) {
-      // Extract task count from stdout if available
-      const match = result.stdout.match(/(\d+)\s+tasks?/i);
-      const count = match ? match[1] : '?';
-      showToast(`Scan complete — ${count} tasks found`, 'success');
+      showResults('Scan Results', parseScanOutput(result.stdout));
       refresh();
     } else {
-      showToast('Scan failed: ' + (result.stderr || 'unknown error'), 'error');
+      const errMsg = result.stderr?.split('\n')[0] || 'Unknown error';
+      showResults('Scan Failed', `<div class="results-error">${errMsg}</div>`);
     }
   } catch (err) {
     showToast('Scan error: ' + err.message, 'error');
@@ -336,10 +447,10 @@ $('btn-dry-run').addEventListener('click', async () => {
   try {
     const result = await window.creditforge.runNightDryRun();
     if (result.exitCode === 0) {
-      showToast('Plan ready — check console for details', 'success');
-      console.log('[DryRun Plan]\n' + result.stdout);
+      showResults('Tonight\'s Plan', parsePlanOutput(result.stdout));
     } else {
-      showToast('Dry run failed', 'error');
+      const errMsg = result.stderr?.split('\n')[0] || 'Unknown error';
+      showResults('Plan Failed', `<div class="results-error">${errMsg}</div>`);
     }
   } catch (err) {
     showToast('Preview error: ' + err.message, 'error');
@@ -364,7 +475,7 @@ $('nm-task-list').addEventListener('click', async (e) => {
       showToast(`Task #${taskId} completed`, 'success');
       refresh();
     } else {
-      showToast(`Task #${taskId} failed`, 'error');
+      showToast(`Task #${taskId} failed (exit ${result.exitCode})`, 'error');
     }
   } catch (err) {
     showToast('Run error: ' + err.message, 'error');
