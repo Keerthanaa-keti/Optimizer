@@ -48,6 +48,70 @@ export function getUsageData(): MenubarUsageData {
   };
 }
 
+// ─── Session Budget Planner ──────────────────────────
+
+// Approximate cost per message by model (USD, based on typical Claude usage)
+const MODEL_COST_PER_MSG: Record<string, number> = {
+  'claude-opus-4-6': 8.50,
+  'claude-sonnet-4-5-20250929': 1.20,
+  'claude-haiku-4-5-20251001': 0.30,
+  // Fallback aliases
+  'opus': 8.50,
+  'sonnet': 1.20,
+  'haiku': 0.30,
+};
+
+export interface BudgetPlan {
+  remainingBudget: number;  // USD
+  models: Array<{
+    name: string;
+    displayName: string;
+    estimatedMessages: number;
+    costPerMsg: number;
+  }>;
+  recommendation: string;
+}
+
+export function getSessionBudgetPlan(): BudgetPlan {
+  const tier = loadTier();
+  const usage = getUsagePercentages(tier);
+  const remaining = Math.max(usage.tier.sessionBudget - usage.data.session.cost, 0);
+
+  // Compute per-model average from actual session data, fall back to defaults
+  const byModel = usage.data.session.byModel;
+  const msgs = usage.data.session.msgs;
+
+  function avgCostForModel(modelKey: string): number {
+    // Try to find actual cost from session data
+    for (const [name, cost] of Object.entries(byModel)) {
+      if (name.toLowerCase().includes(modelKey)) {
+        // Count messages for this model (approximate: split proportionally)
+        const modelShare = cost / Math.max(usage.data.session.cost, 0.01);
+        const modelMsgs = Math.round(msgs * modelShare);
+        if (modelMsgs > 0) return cost / modelMsgs;
+      }
+    }
+    return MODEL_COST_PER_MSG[modelKey] ?? 1.0;
+  }
+
+  const models = [
+    { name: 'opus', displayName: 'Opus', costPerMsg: avgCostForModel('opus') },
+    { name: 'sonnet', displayName: 'Sonnet', costPerMsg: avgCostForModel('sonnet') },
+    { name: 'haiku', displayName: 'Haiku', costPerMsg: avgCostForModel('haiku') },
+  ].map(m => ({
+    ...m,
+    estimatedMessages: m.costPerMsg > 0 ? Math.floor(remaining / m.costPerMsg) : 0,
+  }));
+
+  const opusMsgs = models[0].estimatedMessages;
+  const haikuMsgs = models[2].estimatedMessages;
+  const recommendation = remaining <= 0
+    ? 'Session budget exhausted — resets soon'
+    : `~${opusMsgs} Opus or ~${haikuMsgs} Haiku messages left`;
+
+  return { remainingBudget: remaining, models, recommendation };
+}
+
 // ─── Night Mode / Task Queue Data ──────────────────────────
 
 export interface NightModeStatus {

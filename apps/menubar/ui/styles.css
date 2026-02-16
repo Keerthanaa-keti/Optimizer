@@ -528,3 +528,163 @@ body {
   font-size: 11px;
   color: var(--text-secondary);
 }
+
+/* ─── Budget Planner ─────────────────────────────────── */
+
+.budget-section {
+  padding: 4px 0;
+}
+
+.budget-grid {
+  display: flex;
+  gap: 8px;
+}
+
+.budget-cell {
+  flex: 1;
+  text-align: center;
+  padding: 8px 4px;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+
+.budget-count {
+  display: block;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  font-family: 'SF Mono', 'Menlo', monospace;
+  letter-spacing: -0.5px;
+}
+
+.budget-model {
+  display: block;
+  font-size: 10px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 2px;
+}
+
+.budget-recommendation {
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-align: center;
+  margin-top: 6px;
+}
+
+/* ─── Night Mode Setup & Actions ─────────────────────── */
+
+.nm-setup {
+  text-align: center;
+  padding: 10px 8px;
+  margin-bottom: 8px;
+  background: var(--alert-warning-bg);
+  border: 1px solid var(--alert-warning-border);
+  border-radius: 6px;
+}
+
+.nm-setup-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.nm-actions {
+  display: flex;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.btn-action {
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: none;
+  background: #34c759;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+}
+
+.btn-action:hover {
+  opacity: 0.9;
+}
+
+.btn-action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-sm {
+  flex: 1;
+  padding: 5px 10px;
+  font-size: 11px;
+}
+
+.btn-run-task {
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 500;
+  cursor: pointer;
+  margin-left: 6px;
+  flex-shrink: 0;
+}
+
+.btn-run-task:hover {
+  opacity: 0.9;
+}
+
+.btn-run-task:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ─── Toast Notifications ────────────────────────────── */
+
+.toast-container {
+  position: fixed;
+  bottom: 12px;
+  left: 16px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+  z-index: 100;
+}
+
+.toast {
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #fff;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  pointer-events: auto;
+}
+
+.toast-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.toast-info {
+  background: var(--accent);
+}
+
+.toast-success {
+  background: #34c759;
+}
+
+.toast-error {
+  background: #ff3b30;
+}

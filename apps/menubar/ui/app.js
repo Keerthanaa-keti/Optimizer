@@ -2,12 +2,53 @@
 
 const $ = (id) => document.getElementById(id);
 
+let launchdInstalled = false;
+
 function barColor(pct) {
   if (pct >= 80) return '#ff3b30';
   if (pct >= 60) return '#ff6723';
   if (pct >= 40) return '#ff9f0a';
   return '#34c759';
 }
+
+// ─── Toast Notifications ────────────────────────────────
+
+function showToast(message, type = 'info') {
+  const container = $('toast-container');
+  const toast = document.createElement('div');
+  toast.className = `toast toast-${type}`;
+  toast.textContent = message;
+  container.appendChild(toast);
+  // Trigger animation
+  requestAnimationFrame(() => toast.classList.add('toast-visible'));
+  setTimeout(() => {
+    toast.classList.remove('toast-visible');
+    setTimeout(() => toast.remove(), 300);
+  }, 3000);
+}
+
+// ─── Budget Planner ─────────────────────────────────────
+
+function renderBudgetPlan(plan) {
+  const section = $('budget-section');
+  if (!plan || plan.remainingBudget <= 0) {
+    section.style.display = 'none';
+    return;
+  }
+
+  section.style.display = 'block';
+  const grid = $('budget-grid');
+  grid.innerHTML = plan.models.map(m =>
+    `<div class="budget-cell">
+      <span class="budget-count">~${m.estimatedMessages}</span>
+      <span class="budget-model">${m.displayName}</span>
+    </div>`
+  ).join('');
+
+  $('budget-rec').textContent = plan.recommendation;
+}
+
+// ─── Usage Rendering ────────────────────────────────────
 
 function renderUsage(data) {
   // Session
@@ -80,7 +121,21 @@ function renderAlerts(alerts) {
   `).join('');
 }
 
+// ─── Night Mode Rendering ───────────────────────────────
+
 function renderNightMode(nm) {
+  // Setup banner vs action bar
+  const setupEl = $('nm-setup');
+  const actionsEl = $('nm-actions');
+
+  if (!launchdInstalled) {
+    setupEl.style.display = 'block';
+    actionsEl.style.display = 'none';
+  } else {
+    setupEl.style.display = 'none';
+    actionsEl.style.display = 'flex';
+  }
+
   // Status
   $('nm-status').textContent = nm.isEnabled ? 'Enabled' : 'Disabled';
   $('nm-status').className = 'nm-value ' + (nm.isEnabled ? 'nm-enabled' : 'nm-disabled');
@@ -99,15 +154,16 @@ function renderNightMode(nm) {
     $('nm-today').textContent = 'No runs today';
   }
 
-  // Top tasks
+  // Top tasks with run buttons
   const taskList = $('nm-task-list');
   const taskContainer = $('nm-top-tasks');
   if (nm.topTasks && nm.topTasks.length > 0) {
     taskContainer.style.display = 'block';
     taskList.innerHTML = nm.topTasks.map(t =>
       `<div class="nm-task-row">
-        <span class="nm-task-name" title="${t.title}">${t.project}: ${truncate(t.title, 35)}</span>
+        <span class="nm-task-name" title="${t.title}">${t.project}: ${truncate(t.title, 30)}</span>
         <span class="nm-task-score">${t.score.toFixed(1)}</span>
+        <button class="btn-run-task" data-task-id="${t.id}" title="Run this task">Run</button>
       </div>`
     ).join('');
   } else {
@@ -190,19 +246,23 @@ function truncate(str, len) {
   return str.length > len ? str.slice(0, len) + '...' : str;
 }
 
+// ─── Refresh ────────────────────────────────────────────
+
 async function refresh() {
   try {
-    const data = await window.creditforge.getUsageData();
+    const [data, nm, report, intelligence, budgetPlan] = await Promise.all([
+      window.creditforge.getUsageData(),
+      window.creditforge.getNightModeStatus(),
+      window.creditforge.getMorningReport(),
+      window.creditforge.getIntelligence(),
+      window.creditforge.getBudgetPlan(),
+    ]);
+
     renderUsage(data);
-
-    const nm = await window.creditforge.getNightModeStatus();
     renderNightMode(nm);
-
-    const report = await window.creditforge.getMorningReport();
     renderReport(report);
-
-    const intelligence = await window.creditforge.getIntelligence();
     renderInsights(intelligence);
+    renderBudgetPlan(budgetPlan);
 
     // Pass burn rate to alerts for predictive messaging
     const burnRateJson = intelligence?.burnRate ? JSON.stringify(intelligence.burnRate) : undefined;
@@ -213,7 +273,108 @@ async function refresh() {
   }
 }
 
-// Event listeners
+// ─── Action Handlers ────────────────────────────────────
+
+function setButtonLoading(btn, loading) {
+  btn.disabled = loading;
+  if (loading) {
+    btn.dataset.originalText = btn.textContent;
+    btn.textContent = '...';
+  } else {
+    btn.textContent = btn.dataset.originalText || btn.textContent;
+  }
+}
+
+// Install launchd agents
+$('btn-install-launchd').addEventListener('click', async () => {
+  const btn = $('btn-install-launchd');
+  setButtonLoading(btn, true);
+  try {
+    const result = await window.creditforge.installLaunchd();
+    if (result.success) {
+      launchdInstalled = true;
+      showToast('Night Mode agents installed', 'success');
+      refresh();
+    } else {
+      showToast('Install failed', 'error');
+    }
+  } catch (err) {
+    showToast('Install error: ' + err.message, 'error');
+  } finally {
+    setButtonLoading(btn, false);
+  }
+});
+
+// Scan for tasks
+$('btn-scan').addEventListener('click', async () => {
+  const btn = $('btn-scan');
+  setButtonLoading(btn, true);
+  showToast('Scanning projects...', 'info');
+  try {
+    const result = await window.creditforge.runScan();
+    if (result.exitCode === 0) {
+      // Extract task count from stdout if available
+      const match = result.stdout.match(/(\d+)\s+tasks?/i);
+      const count = match ? match[1] : '?';
+      showToast(`Scan complete — ${count} tasks found`, 'success');
+      refresh();
+    } else {
+      showToast('Scan failed: ' + (result.stderr || 'unknown error'), 'error');
+    }
+  } catch (err) {
+    showToast('Scan error: ' + err.message, 'error');
+  } finally {
+    setButtonLoading(btn, false);
+  }
+});
+
+// Preview night plan (dry run)
+$('btn-dry-run').addEventListener('click', async () => {
+  const btn = $('btn-dry-run');
+  setButtonLoading(btn, true);
+  showToast('Generating plan...', 'info');
+  try {
+    const result = await window.creditforge.runNightDryRun();
+    if (result.exitCode === 0) {
+      showToast('Plan ready — check console for details', 'success');
+      console.log('[DryRun Plan]\n' + result.stdout);
+    } else {
+      showToast('Dry run failed', 'error');
+    }
+  } catch (err) {
+    showToast('Preview error: ' + err.message, 'error');
+  } finally {
+    setButtonLoading(btn, false);
+  }
+});
+
+// Run individual task (delegated click handler on task list)
+$('nm-task-list').addEventListener('click', async (e) => {
+  const btn = e.target.closest('.btn-run-task');
+  if (!btn) return;
+
+  const taskId = parseInt(btn.dataset.taskId, 10);
+  if (isNaN(taskId)) return;
+
+  setButtonLoading(btn, true);
+  showToast(`Running task #${taskId}...`, 'info');
+  try {
+    const result = await window.creditforge.runTask(taskId);
+    if (result.exitCode === 0) {
+      showToast(`Task #${taskId} completed`, 'success');
+      refresh();
+    } else {
+      showToast(`Task #${taskId} failed`, 'error');
+    }
+  } catch (err) {
+    showToast('Run error: ' + err.message, 'error');
+  } finally {
+    setButtonLoading(btn, false);
+  }
+});
+
+// ─── Event Listeners ────────────────────────────────────
+
 $('dashboard-btn').addEventListener('click', () => {
   window.creditforge.openDashboard();
 });
@@ -236,5 +397,13 @@ window.creditforge.onThemeChanged((theme) => {
 (async () => {
   const theme = await window.creditforge.getTheme();
   document.documentElement.setAttribute('data-theme', theme);
+
+  // Check launchd status on startup
+  try {
+    launchdInstalled = await window.creditforge.checkLaunchdStatus();
+  } catch {
+    launchdInstalled = false;
+  }
+
   refresh();
 })();

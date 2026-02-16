@@ -31,6 +31,13 @@
     </div>
     <div class="divider"></div>
 
+    <!-- Session Budget Planner -->
+    <div id="budget-section" class="budget-section" style="display: none">
+      <div class="budget-grid" id="budget-grid"></div>
+      <div class="budget-recommendation" id="budget-rec"></div>
+    </div>
+    <div class="divider"></div>
+
     <!-- Weekly limits -->
     <div class="usage-section">
       <div class="usage-label">Weekly limits</div>
@@ -69,6 +76,13 @@
     <div class="section-title">Night Mode</div>
     <div class="divider"></div>
     <div id="nightmode-section" class="nightmode-section">
+      <!-- Setup banner (shown when launchd not installed) -->
+      <div id="nm-setup" class="nm-setup" style="display: none">
+        <div class="nm-setup-text">Night Mode agents not installed</div>
+        <button class="btn-action" id="btn-install-launchd">Install Night Mode</button>
+      </div>
+
+      <!-- Status rows (always shown) -->
       <div class="nm-row">
         <span class="nm-label">Status</span>
         <span class="nm-value" id="nm-status">--</span>
@@ -85,6 +99,13 @@
         <span class="nm-label">Today</span>
         <span class="nm-value" id="nm-today">--</span>
       </div>
+
+      <!-- Action bar (shown when launchd installed) -->
+      <div id="nm-actions" class="nm-actions" style="display: none">
+        <button class="btn-action btn-sm" id="btn-scan">Scan</button>
+        <button class="btn-action btn-sm" id="btn-dry-run">Preview Plan</button>
+      </div>
+
       <div id="nm-top-tasks" class="nm-tasks" style="display: none">
         <div class="nm-tasks-title">Top queued tasks</div>
         <div id="nm-task-list"></div>
@@ -154,6 +175,9 @@
       </div>
       <div class="footer-tier" id="tier-label">Max 5&times; $100/mo</div>
     </div>
+
+    <!-- Toast notifications -->
+    <div id="toast-container" class="toast-container"></div>
   </div>
 
   <script src="app.js"></script>
