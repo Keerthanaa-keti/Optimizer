@@ -23,12 +23,27 @@ const notificationState: NotificationState = {
   lastIdleNotifyDate: null,
 };
 
+/** Find system Node.js (not Electron's embedded one) */
+function findSystemNode(): string {
+  const candidates = [
+    '/opt/homebrew/bin/node',
+    '/usr/local/bin/node',
+    '/usr/bin/node',
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return p;
+  }
+  return 'node'; // fallback to PATH
+}
+
+const SYSTEM_NODE = findSystemNode();
+
 /** Spawn a CLI subcommand and return { stdout, stderr, exitCode } */
 function spawnCli(args: string[]): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   return new Promise((resolve) => {
     let stdout = '';
     let stderr = '';
-    const proc = spawn(process.execPath, [CLI_ENTRY, ...args], {
+    const proc = spawn(SYSTEM_NODE, [CLI_ENTRY, ...args], {
       cwd: OPTIMIZER_ROOT,
       env: { ...process.env, CI: 'true' },
       timeout: 120_000,
