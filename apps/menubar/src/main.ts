@@ -12,7 +12,18 @@ const WINDOW_WIDTH = 400;
 const WINDOW_HEIGHT = 580;
 const REFRESH_INTERVAL_MS = 30_000;
 const DASHBOARD_PORT = 3141;
-const OPTIMIZER_ROOT = path.join(process.env.HOME ?? '~', 'Documents', 'ClaudeExperiments', 'optimizer');
+
+function resolveRoot(): string {
+  if (process.env.CREDITFORGE_ROOT) return process.env.CREDITFORGE_ROOT;
+  const cwd = process.cwd();
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(cwd, 'package.json'), 'utf-8'));
+    if (pkg.name === 'creditforge') return cwd;
+  } catch { /* ignore */ }
+  return path.join(process.env.HOME ?? '~', '.creditforge', 'app');
+}
+
+const OPTIMIZER_ROOT = resolveRoot();
 const CLI_ENTRY = path.join(OPTIMIZER_ROOT, 'apps', 'cli', 'dist', 'index.js');
 
 let refreshTimer: ReturnType<typeof setInterval> | null = null;

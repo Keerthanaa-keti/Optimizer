@@ -157,6 +157,56 @@
 
   .footer span { color: var(--accent); }
 
+  .value-hero {
+    background: linear-gradient(135deg, #161b22 0%, #1a2332 100%);
+    border: 1px solid var(--accent);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 24px;
+    text-align: center;
+  }
+
+  .value-hero-amount {
+    font-size: 42px;
+    font-weight: 700;
+    color: var(--green);
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .value-hero-label {
+    font-size: 14px;
+    color: var(--text-dim);
+    margin-top: 4px;
+    margin-bottom: 16px;
+  }
+
+  .value-stats {
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+
+  .value-stat {
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+
+  .value-stat strong {
+    color: var(--text);
+  }
+
+  .value-week {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+
+  .value-week strong { color: var(--accent); }
+
   .loading {
     display: flex;
     align-items: center;
@@ -297,29 +347,60 @@ function destroyCharts() {
 
 async function refresh() {
   try {
-    const [statsRes, reportRes] = await Promise.all([
+    const [statsRes, reportRes, nightRes] = await Promise.all([
       fetch('/api/stats'),
       fetch('/api/report'),
+      fetch('/api/night-stats'),
     ]);
     if (!statsRes.ok) throw new Error('API error');
     const data = await statsRes.json();
     if (data.error) throw new Error(data.error);
 
     const reportData = reportRes.ok ? await reportRes.json() : null;
-    render(data, reportData);
+    const nightData = nightRes.ok ? await nightRes.json() : null;
+    render(data, reportData, nightData);
   } catch (err) {
     document.getElementById('content').innerHTML =
       `<div class="loading error">Failed to load stats: ${err.message}</div>`;
   }
 }
 
-function render(data, reportData) {
+function render(data, reportData, nightData) {
   destroyCharts();
 
   document.getElementById('tier-badge').textContent = data.tierLabel;
 
   const sub = data.subscription;
   const content = document.getElementById('content');
+
+  // Build value hero card
+  let valueHtml = '';
+  if (nightData && nightData.valueSaved) {
+    const v = nightData.valueSaved;
+    const w = nightData.thisWeek;
+    const hasData = v.tasksAutomated > 0 || w.tasksRun > 0;
+    if (hasData) {
+      valueHtml = `
+        <div class="value-hero">
+          <div class="value-hero-amount">$${v.recoveredDollars.toFixed(2)}</div>
+          <div class="value-hero-label">subscription value recovered by CreditForge</div>
+          <div class="value-stats">
+            <span class="value-stat"><strong>${v.tasksAutomated}</strong> tasks automated</span>
+            <span class="value-stat"><strong>${v.hoursRecovered}h</strong> recovered</span>
+            <span class="value-stat"><strong>+${v.utilizationBoostPct}%</strong> utilization</span>
+          </div>
+          ${w.tasksRun > 0 ? `<div class="value-week">This week: <strong>${w.succeeded} tasks</strong> done overnight, <strong>$${(nightData.thisWeek.totalCostCents / 100).toFixed(2)}</strong> invested</div>` : ''}
+        </div>
+      `;
+    } else {
+      valueHtml = `
+        <div class="value-hero" style="border-color: var(--border)">
+          <div class="value-hero-amount" style="color: var(--text-dim)">$0.00</div>
+          <div class="value-hero-label">Enable Night Mode to start recovering subscription value</div>
+        </div>
+      `;
+    }
+  }
 
   // Build report HTML if available
   let reportHtml = '';
@@ -356,6 +437,8 @@ function render(data, reportData) {
   }
 
   content.innerHTML = `
+    ${valueHtml}
+
     <div class="summary-cards">
       <div class="card">
         <div class="card-title">Used This Week</div>

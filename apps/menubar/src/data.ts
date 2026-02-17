@@ -10,10 +10,20 @@ import type { IntelligenceReport, ActionableInsight } from '@creditforge/intelli
 import fs from 'node:fs';
 import path from 'node:path';
 
+function getAppRoot(): string {
+  if (process.env.CREDITFORGE_ROOT) return process.env.CREDITFORGE_ROOT;
+  const cwd = process.cwd();
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(cwd, 'package.json'), 'utf-8'));
+    if (pkg.name === 'creditforge') return cwd;
+  } catch { /* ignore */ }
+  return path.join(process.env.HOME ?? '~', '.creditforge', 'app');
+}
+
 function loadTier(): 'pro' | 'max5' | 'max20' {
   const configPaths = [
-    path.join(process.env.HOME ?? '~', 'Documents', 'ClaudeExperiments', 'optimizer', 'creditforge.toml'),
     path.join(process.env.HOME ?? '~', '.creditforge', 'config.toml'),
+    path.join(getAppRoot(), 'creditforge.toml'),
   ];
   for (const p of configPaths) {
     try {
@@ -291,10 +301,9 @@ export function getNightModeStatus(): NightModeStatus {
 }
 
 function getConfigPath(): string {
-  return path.join(
-    process.env.HOME ?? '~',
-    'Documents', 'ClaudeExperiments', 'optimizer', 'creditforge.toml'
-  );
+  const userConfig = path.join(process.env.HOME ?? '~', '.creditforge', 'config.toml');
+  if (fs.existsSync(userConfig)) return userConfig;
+  return path.join(getAppRoot(), 'creditforge.toml');
 }
 
 function isNightModeEnabled(): boolean {

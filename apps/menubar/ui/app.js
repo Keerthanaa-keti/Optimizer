@@ -241,7 +241,15 @@ function renderReportBanner(report) {
   const succeeded = successMatch ? parseInt(successMatch[1], 10) : 0;
   const failed = failMatch ? parseInt(failMatch[1], 10) : 0;
 
-  $('nm-report-summary').textContent = `Night run: ${succeeded} done, ${failed} failed`;
+  // Parse cost to compute recovered value
+  const costMatch = report.content.match(/Total cost:\s*\$?([\d.]+)/);
+  const costDollars = costMatch ? parseFloat(costMatch[1]) : 0;
+
+  let summary = `Night run: ${succeeded} done`;
+  if (failed > 0) summary += `, ${failed} failed`;
+  if (costDollars > 0) summary += ` · $${costDollars.toFixed(2)} recovered`;
+
+  $('nm-report-summary').textContent = summary;
   banner.style.display = 'flex';
 }
 

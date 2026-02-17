@@ -11,10 +11,20 @@ const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 
 const TIER_MONTHLY_SUB: Record<string, number> = { pro: 20, max5: 100, max20: 200 };
 
+function getAppRoot(): string {
+  if (process.env.CREDITFORGE_ROOT) return process.env.CREDITFORGE_ROOT;
+  const cwd = process.cwd();
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(cwd, 'package.json'), 'utf-8'));
+    if (pkg.name === 'creditforge') return cwd;
+  } catch { /* ignore */ }
+  return path.join(process.env.HOME ?? '~', '.creditforge', 'app');
+}
+
 function getTier(): SubscriptionTier {
   const configPaths = [
-    path.join(process.env.HOME ?? '~', 'Documents', 'ClaudeExperiments', 'optimizer', 'creditforge.toml'),
     path.join(process.env.HOME ?? '~', '.creditforge', 'config.toml'),
+    path.join(getAppRoot(), 'creditforge.toml'),
   ];
   for (const p of configPaths) {
     try {
@@ -161,6 +171,102 @@ function parseProjectPathsFromReport(markdown: string): Array<{ path: string; br
   return results;
 }
 
+// ─── Night Stats (Value Dashboard) ───────────────────────
+function buildNightStats(): object {
+  const dbPath = path.join(process.env.HOME ?? '~', '.creditforge', 'creditforge.db');
+  const tier = getTier();
+  const monthlyUsd = TIER_MONTHLY_SUB[tier] ?? 100;
+  const weeklyBudget = Math.round((monthlyUsd * 12 / 52) * 100) / 100;
+  const dailyBudgetUsd = monthlyUsd * 12 / 365;
+  const tierInfo = TIER_LIMITS[tier];
+
+  const empty = {
+    tasksRun: 0, succeeded: 0, totalCostCents: 0,
+    totalTokens: 0, totalMinutes: 0,
+  };
+  const defaults = {
+    allTime: { ...empty },
+    thisWeek: { ...empty },
+    valueSaved: {
+      recoveredDollars: 0, hoursRecovered: 0,
+      utilizationBoostPct: 0, tasksAutomated: 0,
+    },
+  };
+
+  if (!fs.existsSync(dbPath)) return defaults;
+
+  try {
+    const Database = require('better-sqlite3');
+    const db = new Database(dbPath, { readonly: true });
+
+    // All-time night mode stats
+    const allTime = db.prepare(`
+      SELECT COUNT(*) as total_tasks,
+             SUM(CASE WHEN exit_code = 0 THEN 1 ELSE 0 END) as succeeded,
+             COALESCE(SUM(cost_usd_cents), 0) as total_cost_cents,
+             COALESCE(SUM(total_tokens), 0) as total_tokens,
+             COALESCE(SUM(duration_ms), 0) as total_duration_ms
+      FROM executions WHERE branch LIKE 'nightmode/%'
+    `).get() as { total_tasks: number; succeeded: number; total_cost_cents: number; total_tokens: number; total_duration_ms: number };
+
+    // This week (last 7 days)
+    const weekAgo = daysAgo(7);
+    const thisWeek = db.prepare(`
+      SELECT COUNT(*) as total_tasks,
+             SUM(CASE WHEN exit_code = 0 THEN 1 ELSE 0 END) as succeeded,
+             COALESCE(SUM(cost_usd_cents), 0) as total_cost_cents,
+             COALESCE(SUM(total_tokens), 0) as total_tokens,
+             COALESCE(SUM(duration_ms), 0) as total_duration_ms
+      FROM executions WHERE branch LIKE 'nightmode/%' AND started_at >= ?
+    `).get(weekAgo) as typeof allTime;
+
+    db.close();
+
+    // Value calculations
+    // recoveredDollars: map night tokens to subscription dollar value
+    const allTimeRecovered = tierInfo.estimatedDailyTokens > 0
+      ? (allTime.total_tokens / tierInfo.estimatedDailyTokens) * dailyBudgetUsd
+      : 0;
+    const weekRecovered = tierInfo.estimatedDailyTokens > 0
+      ? (thisWeek.total_tokens / tierInfo.estimatedDailyTokens) * dailyBudgetUsd
+      : 0;
+
+    // hoursRecovered: duration_ms converted to hours (Claude did the work)
+    const hoursRecovered = allTime.total_duration_ms / 3_600_000;
+
+    // utilizationBoostPct: this week's night tokens as % of weekly token budget
+    const weeklyTokenBudget = tierInfo.estimatedDailyTokens * 7;
+    const utilizationBoost = weeklyTokenBudget > 0
+      ? (thisWeek.total_tokens / weeklyTokenBudget) * 100
+      : 0;
+
+    return {
+      allTime: {
+        tasksRun: allTime.total_tasks,
+        succeeded: allTime.succeeded ?? 0,
+        totalCostCents: allTime.total_cost_cents,
+        totalTokens: allTime.total_tokens,
+        totalMinutes: Math.round(allTime.total_duration_ms / 60_000),
+      },
+      thisWeek: {
+        tasksRun: thisWeek.total_tasks,
+        succeeded: thisWeek.succeeded ?? 0,
+        totalCostCents: thisWeek.total_cost_cents,
+        totalTokens: thisWeek.total_tokens,
+        totalMinutes: Math.round(thisWeek.total_duration_ms / 60_000),
+      },
+      valueSaved: {
+        recoveredDollars: Math.round(allTimeRecovered * 100) / 100,
+        hoursRecovered: Math.round(hoursRecovered * 10) / 10,
+        utilizationBoostPct: Math.round(utilizationBoost * 10) / 10,
+        tasksAutomated: allTime.succeeded ?? 0,
+      },
+    };
+  } catch {
+    return defaults;
+  }
+}
+
 function readBody(req: http.IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
     let body = '';
@@ -178,6 +284,13 @@ export function startServer(port: number): http.Server {
       const stats = buildApiStats();
       res.writeHead(stats ? 200 : 503, headers);
       res.end(JSON.stringify(stats ?? { error: 'Stats not available' }));
+      return;
+    }
+
+    if (req.url === '/api/night-stats') {
+      const nightStats = buildNightStats();
+      res.writeHead(200, headers);
+      res.end(JSON.stringify(nightStats));
       return;
     }
 
