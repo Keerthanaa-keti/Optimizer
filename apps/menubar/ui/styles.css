@@ -122,29 +122,111 @@ body {
   opacity: 0.5;
 }
 
-/* Usage sections */
-.usage-section {
-  padding: 4px 0;
+/* Subscription Hero */
+.sub-hero {
+  padding: 8px 0;
 }
 
-.usage-label {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text);
-  margin-bottom: 2px;
+.sub-hero-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 2px 0;
 }
 
-.usage-sublabel {
+.sub-hero-label {
   font-size: 13px;
-  font-weight: 500;
-  color: var(--text);
-  margin-bottom: 2px;
+  color: var(--text-secondary);
 }
 
-.usage-reset {
-  font-size: 12px;
-  color: var(--text-secondary);
+.sub-hero-amount {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.3px;
+}
+
+.sub-hero-weekly {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+/* Subscription Cards */
+.sub-card {
+  padding: 8px 0;
+}
+
+.sub-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
   margin-bottom: 6px;
+}
+
+.sub-card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.sub-card-meta {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.sub-card-dollars {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  margin-top: 4px;
+  font-weight: 500;
+}
+
+.sub-card-dollars span:first-child {
+  color: var(--text);
+}
+
+.sub-card-dollars span:last-child {
+  color: var(--text-secondary);
+}
+
+.sub-card-reset {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+/* Subscription Value Card */
+.sub-value-card {
+  padding: 10px 0;
+  text-align: center;
+}
+
+.sub-value-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.sub-value-pct {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+
+.sub-value-pct.val-green { color: var(--bar-green); }
+.sub-value-pct.val-yellow { color: var(--bar-yellow); }
+.sub-value-pct.val-red { color: var(--bar-red); }
+
+.sub-value-waste {
+  font-size: 11px;
+  color: var(--bar-orange);
+  font-weight: 500;
+  margin-top: 2px;
 }
 
 /* Progress bars */
@@ -180,46 +262,6 @@ body {
   min-width: 60px;
   text-align: right;
   white-space: nowrap;
-}
-
-/* Alert section */
-.alert {
-  padding: 10px 12px;
-  border-radius: 8px;
-  margin: 4px 0;
-  border: 1px solid;
-}
-
-.alert-info {
-  background: var(--alert-info-bg);
-  border-color: var(--alert-info-border);
-}
-
-.alert-success {
-  background: var(--alert-success-bg);
-  border-color: var(--alert-success-border);
-}
-
-.alert-warning {
-  background: var(--alert-warning-bg);
-  border-color: var(--alert-warning-border);
-}
-
-.alert-danger {
-  background: var(--alert-danger-bg);
-  border-color: var(--alert-danger-border);
-}
-
-.alert-title {
-  font-size: 12px;
-  font-weight: 600;
-  margin-bottom: 2px;
-}
-
-.alert-message {
-  font-size: 12px;
-  color: var(--text-secondary);
-  line-height: 1.4;
 }
 
 /* Night Mode section */
@@ -299,191 +341,280 @@ body {
   flex-shrink: 0;
 }
 
-/* Model breakdown */
-.model-section {
-  padding: 4px 0;
-}
+/* ─── Night Mode Toggle Switch ──────────────────────── */
 
-.model-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 3px 0;
-  font-size: 12px;
-}
-
-.model-name {
-  color: var(--text);
-  font-family: 'SF Mono', 'Menlo', monospace;
-  font-size: 11px;
-}
-
-.model-pct {
-  color: var(--text-secondary);
-  font-family: 'SF Mono', 'Menlo', monospace;
-  font-size: 11px;
-}
-
-/* Activity */
-.activity-section {
-  padding: 6px 0;
-}
-
-.activity-row {
+.nm-toggle {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
-  color: var(--text-secondary);
-  padding: 2px 0;
+  cursor: pointer;
 }
 
-.active-dot {
-  width: 8px;
-  height: 8px;
+.nm-toggle input {
+  display: none;
+}
+
+.nm-toggle-slider {
+  position: relative;
+  width: 34px;
+  height: 20px;
+  background: var(--bar-bg);
+  border-radius: 10px;
+  transition: background 0.2s ease;
+  flex-shrink: 0;
+}
+
+.nm-toggle-slider::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background: #fff;
   border-radius: 50%;
-  background: var(--bar-green);
-  animation: pulse 2s ease-in-out infinite;
+  transition: transform 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
 }
 
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+.nm-toggle input:checked + .nm-toggle-slider {
+  background: #34c759;
 }
 
-/* Morning Report */
-.report-content {
-  padding: 8px;
-  background: var(--bg-secondary);
-  border-radius: 6px;
-  margin: 4px 0;
-  font-size: 11px;
-  line-height: 1.5;
-  max-height: 120px;
-  overflow-y: auto;
+.nm-toggle input:checked + .nm-toggle-slider::after {
+  transform: translateX(14px);
 }
 
-.report-h1 {
+.nm-toggle-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+/* ─── Task Action Buttons ───────────────────────────── */
+
+.nm-task-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-left: 6px;
+}
+
+.btn-skip {
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: none;
+  background: #ff9f0a;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.btn-skip:hover {
+  opacity: 0.9;
+}
+
+.btn-delete {
+  padding: 2px 5px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: var(--bar-red);
   font-size: 12px;
   font-weight: 600;
-  margin-bottom: 4px;
+  cursor: pointer;
+  line-height: 1;
 }
 
-.report-h2 {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  margin-top: 4px;
-}
-
-.report-item {
-  color: var(--text);
-  padding-left: 8px;
-}
-
-.report-line {
-  color: var(--text-secondary);
-}
-
-/* Insights section */
-.insights-section {
-  padding: 4px 0;
-}
-
-/* Utilization Meter */
-.utilization-meter {
-  text-align: center;
-  padding: 8px 0 6px;
-}
-
-.utilization-pct {
-  font-size: 22px;
-  font-weight: 700;
-  letter-spacing: -0.5px;
-}
-
-.util-green { color: var(--bar-green); }
-.util-yellow { color: var(--bar-yellow); }
-.util-red { color: var(--bar-red); }
-
-.utilization-context {
-  font-size: 11px;
-  color: var(--text-secondary);
-  margin-top: 2px;
-}
-
-.waste-callout {
-  font-size: 11px;
-  color: var(--bar-orange);
-  font-weight: 500;
-  margin-top: 2px;
-}
-
-/* Smart Action Card */
-.action-card {
-  border-radius: 8px;
-  padding: 10px 12px;
-  margin: 8px 0;
-  border-left: 3px solid var(--border);
-  background: var(--bg-secondary);
-}
-
-.action-danger {
-  border-left-color: var(--bar-red);
+.btn-delete:hover {
   background: var(--alert-danger-bg);
 }
 
-.action-warning {
-  border-left-color: var(--bar-orange);
-  background: var(--alert-warning-bg);
+/* ─── View All Link ─────────────────────────────────── */
+
+.nm-tasks-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
 }
 
-.action-info {
-  border-left-color: var(--accent);
-  background: var(--alert-info-bg);
+.nm-tasks-header .nm-tasks-title {
+  margin-bottom: 0;
 }
 
-.action-success {
-  border-left-color: var(--bar-green);
-  background: var(--alert-success-bg);
-}
-
-.action-headline {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text);
-  margin-bottom: 2px;
-}
-
-.action-detail {
+.nm-view-all {
+  background: none;
+  border: none;
+  color: var(--accent);
   font-size: 11px;
-  color: var(--text-secondary);
-  line-height: 1.4;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0;
 }
 
-/* Quick Stats Row */
-.quick-stats {
+.nm-view-all:hover {
+  text-decoration: underline;
+}
+
+/* ─── Task List Scrollable Container ────────────────── */
+
+.nm-task-list-scroll {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+/* ─── Task Row Animation ────────────────────────────── */
+
+.nm-task-row {
+  transition: opacity 0.3s ease, max-height 0.3s ease;
+  max-height: 40px;
+  overflow: hidden;
+}
+
+.nm-task-row.removing {
+  opacity: 0;
+  max-height: 0;
+  padding: 0;
+}
+
+/* ─── Plan Task Skip Button ─────────────────────────── */
+
+.results-task {
+  position: relative;
+}
+
+.results-task .btn-skip {
+  margin-left: auto;
+}
+
+
+/* ─── Morning Report Banner ─────────────────────────── */
+
+.nm-report-banner {
   display: flex;
-  gap: 12px;
-  padding: 4px 0;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  margin: 4px 0;
+  background: var(--alert-success-bg);
+  border: 1px solid var(--alert-success-border);
+  border-radius: 6px;
 }
 
-.quick-stat {
-  display: flex;
-  align-items: baseline;
-  gap: 4px;
-}
-
-.quick-stat-value {
+.nm-report-summary {
   font-size: 12px;
+  font-weight: 500;
+  color: var(--bar-green);
+}
+
+.btn-view-report {
+  padding: 3px 10px;
+  border-radius: 4px;
+  border: none;
+  background: var(--bar-green);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.btn-view-report:hover {
+  opacity: 0.9;
+}
+
+/* ─── Exclude Paths Section ────────────────────────── */
+
+.nm-exclude-section {
+  margin: 8px 0;
+  padding: 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.nm-exclude-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.nm-exclude-title {
+  font-size: 11px;
   font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.nm-exclude-add {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--accent);
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nm-exclude-add:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+.nm-exclude-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.nm-exclude-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  padding: 2px 0;
+}
+
+.nm-exclude-path {
   color: var(--text);
   font-family: 'SF Mono', 'Menlo', monospace;
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  margin-right: 6px;
 }
 
-.quick-stat-label {
+.nm-exclude-remove {
+  background: none;
+  border: none;
+  color: var(--bar-red);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.nm-exclude-remove:hover {
+  background: var(--alert-danger-bg);
+  border-radius: 3px;
+}
+
+.nm-exclude-empty {
   font-size: 11px;
   color: var(--text-secondary);
+  font-style: italic;
 }
 
 /* Footer */
@@ -527,51 +658,6 @@ body {
   text-align: center;
   font-size: 11px;
   color: var(--text-secondary);
-}
-
-/* ─── Budget Planner ─────────────────────────────────── */
-
-.budget-section {
-  padding: 4px 0;
-}
-
-.budget-grid {
-  display: flex;
-  gap: 8px;
-}
-
-.budget-cell {
-  flex: 1;
-  text-align: center;
-  padding: 8px 4px;
-  background: var(--bg-secondary);
-  border-radius: 6px;
-  border: 1px solid var(--border);
-}
-
-.budget-count {
-  display: block;
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--text);
-  font-family: 'SF Mono', 'Menlo', monospace;
-  letter-spacing: -0.5px;
-}
-
-.budget-model {
-  display: block;
-  font-size: 10px;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-top: 2px;
-}
-
-.budget-recommendation {
-  font-size: 11px;
-  color: var(--text-secondary);
-  text-align: center;
-  margin-top: 6px;
 }
 
 /* ─── Night Mode Setup & Actions ─────────────────────── */

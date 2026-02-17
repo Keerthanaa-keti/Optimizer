@@ -1,11 +1,15 @@
 import http from 'node:http';
+import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { loadStatsCache, scanLiveUsage, TIER_LIMITS } from '@creditforge/token-monitor';
-import type { SubscriptionTier, JsonlDaySummary } from '@creditforge/token-monitor';
+import { loadStatsCache, scanLiveUsage, TIER_LIMITS, getUsagePercentages } from '@creditforge/token-monitor';
+import type { SubscriptionTier } from '@creditforge/token-monitor';
+import { getIntelligenceReport, computeActionableInsights } from '@creditforge/intelligence';
 
 // When compiled to CJS, __dirname is available. In dist/, go up to package root.
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
+
+const TIER_MONTHLY_SUB: Record<string, number> = { pro: 20, max5: 100, max20: 200 };
 
 function getTier(): SubscriptionTier {
   const configPaths = [
@@ -59,30 +63,9 @@ function buildApiStats(): object | null {
     ? Math.round((todayTokens / tierInfo.estimatedDailyTokens) * 1000) / 10
     : 0;
 
-  // Week
-  const weekStart = daysAgo(7);
-  const weekEntries = cache.dailyModelTokens.filter(d => d.date >= weekStart && d.date <= today);
-  const weekTokens = weekEntries.reduce((s, e) =>
-    s + Object.values(e.tokensByModel).reduce((a, b) => a + b, 0), 0);
-  const avg7d = weekEntries.length > 0 ? Math.round(weekTokens / weekEntries.length) : 0;
-
-  // Trend
-  const recent = weekEntries.slice(-3);
-  const older = weekEntries.slice(0, -3);
-  const recentAvg = recent.length > 0
-    ? recent.reduce((s, e) => s + Object.values(e.tokensByModel).reduce((a, b) => a + b, 0), 0) / recent.length
-    : 0;
-  const olderAvg = older.length > 0
-    ? older.reduce((s, e) => s + Object.values(e.tokensByModel).reduce((a, b) => a + b, 0), 0) / older.length
-    : 0;
-  let trend = 'stable';
-  if (olderAvg > 0 && recentAvg > olderAvg * 1.2) trend = 'increasing';
-  else if (olderAvg > 0 && recentAvg < olderAvg * 0.8) trend = 'decreasing';
-
-  // Last 30 days daily data for chart
-  const thirtyDaysAgo = daysAgo(30);
+  // Last 7 days daily data for chart
   const dailyData: Array<{ date: string; total: number; byModel: Record<string, number> }> = [];
-  for (let i = 30; i >= 0; i--) {
+  for (let i = 6; i >= 0; i--) {
     const dateStr = daysAgo(i);
     const entry = cache.dailyModelTokens.find(d => d.date === dateStr);
     dailyData.push({
@@ -92,83 +75,169 @@ function buildApiStats(): object | null {
     });
   }
 
-  // All unique models across all daily data
-  const allModels = new Set<string>();
-  for (const entry of cache.dailyModelTokens) {
-    for (const model of Object.keys(entry.tokensByModel)) {
-      allModels.add(model);
-    }
-  }
+  // ─── Subscription Dollar Math ──────────────────────────
+  const monthlyUsd = TIER_MONTHLY_SUB[tier] ?? 100;
+  const weeklyBudget = Math.round((monthlyUsd * 12 / 52) * 100) / 100;
+  const dailyBudgetUsd = monthlyUsd * 12 / 365;
 
-  // Peak day in 30d
-  let peakDay = { date: today, tokens: 0 };
-  for (const d of dailyData) {
-    if (d.total > peakDay.tokens) peakDay = { date: d.date, tokens: d.total };
-  }
+  // Convert token counts to dollar estimates per day
+  const dailySpend = dailyData.map(d => {
+    const dayDollars = tierInfo.estimatedDailyTokens > 0
+      ? (d.total / tierInfo.estimatedDailyTokens) * dailyBudgetUsd
+      : 0;
+    return { date: d.date, dollars: Math.round(dayDollars * 100) / 100 };
+  });
 
-  // Model totals for all time
-  const modelTotals: Record<string, number> = {};
-  for (const [model, usage] of Object.entries(cache.modelUsage)) {
-    modelTotals[model] = usage.inputTokens + usage.outputTokens;
-  }
+  const weeklyUsed = dailySpend.reduce((sum, d) => sum + d.dollars, 0);
+  const weeklyUtilizationPct = weeklyBudget > 0
+    ? Math.round((weeklyUsed / weeklyBudget) * 1000) / 10
+    : 0;
+
+  // ─── Intelligence Tip ──────────────────────────────────
+  let tip: { headline: string; detail: string } = {
+    headline: 'Getting started',
+    detail: 'Use Claude more to see personalized tips.',
+  };
+
+  try {
+    const usage = getUsagePercentages(tier as 'pro' | 'max5' | 'max20');
+    const report = getIntelligenceReport(usage, cache, null);
+    const actionable = computeActionableInsights(
+      usage,
+      report.burnRate,
+      false,
+      0,
+      report.scheduleSuggestion,
+    );
+    tip = { headline: actionable.action.headline, detail: actionable.action.detail };
+  } catch { /* intelligence unavailable — use default */ }
 
   return {
     tier,
     tierLabel: tierInfo.label,
-    dailyBudget: tierInfo.estimatedDailyTokens,
-    today: {
-      date: today,
-      tokens: todayTokens,
-      pct,
-      messages: Math.max(todayActivity?.messageCount ?? 0, live.messageCount),
-      sessions: todayActivity?.sessionCount ?? 0,
-      toolCalls: todayActivity?.toolCallCount ?? 0,
-      byModel: mergedByModel,
-    },
-    live: {
-      activeSessions: live.activeSessions,
-      sessions: live.sessions,
-      detailedByModel: live.detailedByModel,
-      messageCount: live.messageCount,
-    },
-    week: {
-      tokens: weekTokens,
-      avg: avg7d,
-      trend,
-      peak: peakDay,
-    },
-    dailyData,
-    allModels: [...allModels],
     hourCounts: cache.hourCounts,
-    modelTotals,
-    modelUsage: cache.modelUsage,
-    allTime: {
-      sessions: cache.totalSessions,
-      messages: cache.totalMessages,
-      firstSession: cache.firstSessionDate,
+    subscription: {
+      monthlyUsd,
+      weeklyBudget,
+      dailyBudget: Math.round(dailyBudgetUsd * 100) / 100,
+      weeklyUsed: Math.round(weeklyUsed * 100) / 100,
+      weeklyUtilizationPct,
+      dailySpend,
     },
+    tip,
   };
 }
 
+const REPORT_DIR = path.join(process.env.HOME ?? '~', '.creditforge', 'reports');
+
+function getReport(date?: string): { date: string; markdown: string; projects: Array<{ path: string; branch: string }> } | null {
+  const reportDir = REPORT_DIR;
+  const targetDate = date ?? new Date().toISOString().split('T')[0];
+  const reportPath = path.join(reportDir, `${targetDate}.md`);
+
+  if (!fs.existsSync(reportPath)) return null;
+
+  const markdown = fs.readFileSync(reportPath, 'utf-8');
+  const projects = parseProjectPathsFromReport(markdown);
+  return { date: targetDate, markdown, projects };
+}
+
+function getReportDates(): string[] {
+  if (!fs.existsSync(REPORT_DIR)) return [];
+  return fs.readdirSync(REPORT_DIR)
+    .filter(f => f.endsWith('.md'))
+    .map(f => f.replace('.md', ''))
+    .sort()
+    .reverse();
+}
+
+function parseProjectPathsFromReport(markdown: string): Array<{ path: string; branch: string }> {
+  const results: Array<{ path: string; branch: string }> = [];
+  const regex = /^Project:\s*(.+?)\s*\|\s*Branch:\s*(.+)$/gm;
+  let match;
+  while ((match = regex.exec(markdown)) !== null) {
+    results.push({ path: match[1].trim(), branch: match[2].trim() });
+  }
+  return results;
+}
+
+function readBody(req: http.IncomingMessage): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let body = '';
+    req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
+    req.on('end', () => resolve(body));
+    req.on('error', reject);
+  });
+}
+
 export function startServer(port: number): http.Server {
-  const server = http.createServer((req, res) => {
+  const server = http.createServer(async (req, res) => {
+    const headers = { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' };
+
     if (req.url === '/api/stats') {
       const stats = buildApiStats();
-      res.writeHead(stats ? 200 : 503, {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      });
+      res.writeHead(stats ? 200 : 503, headers);
       res.end(JSON.stringify(stats ?? { error: 'Stats not available' }));
       return;
     }
 
-    if (req.url === '/api/live-stats') {
-      const live = scanLiveUsage();
-      res.writeHead(200, {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      });
-      res.end(JSON.stringify(live));
+    // Morning report endpoints
+    if (req.url?.startsWith('/api/report') && req.method === 'GET') {
+      if (req.url === '/api/report/list') {
+        res.writeHead(200, headers);
+        res.end(JSON.stringify({ dates: getReportDates() }));
+        return;
+      }
+      // /api/report or /api/report?date=YYYY-MM-DD
+      const url = new URL(req.url, `http://127.0.0.1:${port}`);
+      const dateParam = url.searchParams.get('date') ?? undefined;
+      const report = getReport(dateParam);
+      if (report) {
+        res.writeHead(200, headers);
+        res.end(JSON.stringify(report));
+      } else {
+        res.writeHead(404, headers);
+        res.end(JSON.stringify({ error: 'No report found' }));
+      }
+      return;
+    }
+
+    // Push nightmode branch to remote
+    if (req.url === '/api/push' && req.method === 'POST') {
+      try {
+        const body = JSON.parse(await readBody(req));
+        const { projectPath, branch } = body;
+
+        if (!projectPath || !branch) {
+          res.writeHead(400, headers);
+          res.end(JSON.stringify({ error: 'Missing projectPath or branch' }));
+          return;
+        }
+
+        if (!branch.startsWith('nightmode/')) {
+          res.writeHead(403, headers);
+          res.end(JSON.stringify({ error: 'Only nightmode/ branches can be pushed' }));
+          return;
+        }
+
+        const resolved = projectPath.replace(/^~/, process.env.HOME ?? '');
+        if (!fs.existsSync(path.join(resolved, '.git'))) {
+          res.writeHead(400, headers);
+          res.end(JSON.stringify({ error: 'Not a git repository' }));
+          return;
+        }
+
+        const output = execSync(`git push origin ${branch}`, {
+          cwd: resolved,
+          encoding: 'utf-8',
+          timeout: 30_000,
+        });
+        res.writeHead(200, headers);
+        res.end(JSON.stringify({ success: true, output: output.trim() }));
+      } catch (err) {
+        res.writeHead(500, headers);
+        res.end(JSON.stringify({ error: err instanceof Error ? err.message : 'Push failed' }));
+      }
       return;
     }
 

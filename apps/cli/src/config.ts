@@ -9,6 +9,7 @@ export interface CreditForgeConfig {
     creditCapPercent: number;
     modelPreference: string;
     maxBudgetPerTaskUsd: number;
+    excludePaths: string[];
   };
   scanner: {
     scanRoots: string[];
@@ -35,6 +36,7 @@ const DEFAULT_CONFIG: CreditForgeConfig = {
     creditCapPercent: 75,
     modelPreference: 'sonnet',
     maxBudgetPerTaskUsd: 0.50,
+    excludePaths: [],
   },
   scanner: {
     scanRoots: [],

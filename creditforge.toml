@@ -8,6 +8,7 @@ end_hour = 6
 credit_cap_percent = 75
 model_preference = "sonnet"
 max_budget_per_task_usd = 0.50
+exclude_paths = ["~/Documents/ClaudeExperiments/GitCode"]
 
 [scanner]
 scan_roots = [

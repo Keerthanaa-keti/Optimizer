@@ -14,63 +14,72 @@
       <button class="header-btn" id="quit-btn" title="Quit">&times;</button>
     </div>
 
-    <!-- Plan usage limits -->
-    <div class="section-title">Plan usage limits</div>
-    <div class="divider"></div>
-
-    <!-- Current session -->
-    <div class="usage-section">
-      <div class="usage-label">Current session</div>
-      <div class="usage-reset" id="session-reset">Resets in 5h 0min</div>
-      <div class="progress-wrap">
-        <div class="progress-bar">
-          <div class="progress-fill" id="session-fill" style="width: 0%"></div>
-        </div>
-        <span class="progress-pct" id="session-pct">0% used</span>
+    <!-- Subscription Hero -->
+    <div class="sub-hero">
+      <div class="sub-hero-row">
+        <span class="sub-hero-label">Your Plan</span>
+        <span class="sub-hero-amount" id="sub-plan-monthly">$100/month</span>
+      </div>
+      <div class="sub-hero-row">
+        <span class="sub-hero-label">This week's budget</span>
+        <span class="sub-hero-weekly" id="sub-plan-weekly">$23.08</span>
       </div>
     </div>
     <div class="divider"></div>
 
-    <!-- Session Budget Planner -->
-    <div id="budget-section" class="budget-section" style="display: none">
-      <div class="budget-grid" id="budget-grid"></div>
-      <div class="budget-recommendation" id="budget-rec"></div>
+    <!-- This Week Card -->
+    <div class="sub-card">
+      <div class="sub-card-header">
+        <span class="sub-card-title">This Week</span>
+        <span class="sub-card-meta" id="sub-weekly-msgs">0 msgs</span>
+      </div>
+      <div class="progress-wrap">
+        <div class="progress-bar">
+          <div class="progress-fill" id="sub-weekly-fill" style="width: 0%"></div>
+        </div>
+        <span class="progress-pct" id="sub-weekly-pct">0%</span>
+      </div>
+      <div class="sub-card-dollars">
+        <span id="sub-weekly-used">$0 used</span>
+        <span id="sub-weekly-remaining">$0 left</span>
+      </div>
+      <div class="sub-card-reset" id="sub-weekly-reset">Resets Sat 2:30 PM</div>
     </div>
     <div class="divider"></div>
 
-    <!-- Weekly limits -->
-    <div class="usage-section">
-      <div class="usage-label">Weekly limits</div>
-    </div>
-    <div class="divider-thin"></div>
-
-    <!-- All models -->
-    <div class="usage-section">
-      <div class="usage-sublabel">All models</div>
-      <div class="usage-reset" id="weekly-reset">Resets Sat 2:30 PM</div>
+    <!-- Current Session Card -->
+    <div class="sub-card">
+      <div class="sub-card-header">
+        <span class="sub-card-title">Current Session</span>
+        <span class="sub-card-meta" id="sub-session-meta">5h window</span>
+      </div>
       <div class="progress-wrap">
         <div class="progress-bar">
-          <div class="progress-fill" id="weekly-fill" style="width: 0%"></div>
+          <div class="progress-fill" id="sub-session-fill" style="width: 0%"></div>
         </div>
-        <span class="progress-pct" id="weekly-pct">0% used</span>
+        <span class="progress-pct" id="sub-session-pct">0%</span>
       </div>
-    </div>
-
-    <!-- Sonnet only -->
-    <div class="usage-section">
-      <div class="usage-sublabel">Sonnet only</div>
-      <div class="usage-reset" id="sonnet-reset">Resets Mon 9:30 PM</div>
-      <div class="progress-wrap">
-        <div class="progress-bar">
-          <div class="progress-fill sonnet" id="sonnet-fill" style="width: 0%"></div>
-        </div>
-        <span class="progress-pct" id="sonnet-pct">0% used</span>
+      <div class="sub-card-dollars">
+        <span id="sub-session-spent">$0 spent this session</span>
+        <span id="sub-session-msgs">0 msgs</span>
       </div>
+      <div class="sub-card-reset" id="sub-session-reset">Resets in 5h 0min</div>
     </div>
     <div class="divider"></div>
 
-    <!-- Alerts -->
-    <div id="alerts-container"></div>
+    <!-- Subscription Value Card -->
+    <div class="sub-value-card" id="sub-value-card">
+      <div class="sub-value-title">Subscription Value</div>
+      <div class="sub-value-pct" id="sub-util-pct">0% utilized this week</div>
+      <div class="sub-value-waste" id="sub-waste" style="display: none"></div>
+    </div>
+    <div class="divider"></div>
+
+    <!-- Morning Report Banner -->
+    <div id="morning-report-banner" class="nm-report-banner" style="display: none">
+      <span id="nm-report-summary" class="nm-report-summary">Night run: 0 done, 0 failed</span>
+      <button class="btn-view-report" id="btn-view-report">View Report</button>
+    </div>
 
     <!-- Night Mode Section -->
     <div class="section-title">Night Mode</div>
@@ -85,7 +94,11 @@
       <!-- Status rows (always shown) -->
       <div class="nm-row">
         <span class="nm-label">Status</span>
-        <span class="nm-value" id="nm-status">--</span>
+        <label class="nm-toggle" id="nm-toggle">
+          <input type="checkbox" id="nm-toggle-input">
+          <span class="nm-toggle-slider"></span>
+          <span class="nm-toggle-label" id="nm-toggle-label">Disabled</span>
+        </label>
       </div>
       <div class="nm-row">
         <span class="nm-label">Next run</span>
@@ -94,6 +107,14 @@
       <div class="nm-row">
         <span class="nm-label">Queued tasks</span>
         <span class="nm-value nm-highlight" id="nm-queued">0</span>
+      </div>
+      <div class="nm-row">
+        <span class="nm-label">Night budget</span>
+        <span class="nm-value" id="nm-sub-budget">--</span>
+      </div>
+      <div class="nm-row">
+        <span class="nm-label">Window</span>
+        <span class="nm-value" id="nm-window">--</span>
       </div>
       <div class="nm-row">
         <span class="nm-label">Today</span>
@@ -106,8 +127,20 @@
         <button class="btn-action btn-sm" id="btn-dry-run">Preview Plan</button>
       </div>
 
+      <!-- Exclude paths settings -->
+      <div class="nm-exclude-section" id="nm-exclude-section">
+        <div class="nm-exclude-header">
+          <span class="nm-exclude-title">Excluded Paths</span>
+          <button class="nm-exclude-add" id="nm-exclude-add" title="Add path">+</button>
+        </div>
+        <div id="nm-exclude-list" class="nm-exclude-list"></div>
+      </div>
+
       <div id="nm-top-tasks" class="nm-tasks" style="display: none">
-        <div class="nm-tasks-title">Top queued tasks</div>
+        <div class="nm-tasks-header">
+          <div class="nm-tasks-title">Top queued tasks</div>
+          <button class="nm-view-all" id="nm-view-all" style="display: none">View All (<span id="nm-view-all-count">0</span>)</button>
+        </div>
         <div id="nm-task-list"></div>
       </div>
 
@@ -122,59 +155,6 @@
     </div>
     <div class="divider"></div>
 
-    <!-- Model breakdown -->
-    <div id="model-breakdown" class="model-section"></div>
-
-    <!-- Activity -->
-    <div class="activity-section">
-      <div class="activity-row">
-        <span id="session-msgs">Session: 0 msgs</span>
-        <span id="weekly-msgs">Weekly: 0</span>
-      </div>
-      <div class="activity-row" id="active-sessions-row" style="display: none">
-        <span class="active-dot"></span>
-        <span id="active-sessions-text">0 active sessions</span>
-      </div>
-    </div>
-    <div class="divider"></div>
-
-    <!-- Morning Report -->
-    <div id="report-section" style="display: none">
-      <div class="section-title">Morning Report</div>
-      <div class="report-content" id="report-content"></div>
-      <div class="divider"></div>
-    </div>
-
-    <!-- Insights Section -->
-    <div class="section-title">Insights</div>
-    <div class="divider"></div>
-    <div id="insights-section" class="insights-section">
-      <!-- Subscription Value Meter -->
-      <div class="utilization-meter">
-        <div class="utilization-pct" id="ins-util-pct">--</div>
-        <div class="utilization-context" id="ins-util-context"></div>
-        <div class="waste-callout" id="ins-waste" style="display: none"></div>
-      </div>
-
-      <!-- Smart Action Card -->
-      <div class="action-card" id="ins-action-card">
-        <div class="action-headline" id="ins-action-headline">--</div>
-        <div class="action-detail" id="ins-action-detail"></div>
-      </div>
-
-      <!-- Quick Stats Row -->
-      <div class="quick-stats">
-        <div class="quick-stat">
-          <span class="quick-stat-value" id="ins-burn-rate">--</span>
-          <span class="quick-stat-label">burn rate</span>
-        </div>
-        <div class="quick-stat" id="ins-best-window-stat" style="display: none">
-          <span class="quick-stat-value" id="ins-best-window">--</span>
-          <span class="quick-stat-label">best window</span>
-        </div>
-      </div>
-    </div>
-    <div class="divider"></div>
 
     <!-- Footer -->
     <div class="footer">
@@ -182,7 +162,7 @@
         <button class="btn" id="dashboard-btn">Open Dashboard</button>
         <button class="btn btn-secondary" id="refresh-btn">Refresh</button>
       </div>
-      <div class="footer-tier" id="tier-label">Max 5&times; $100/mo</div>
+      <div class="footer-tier" id="tier-label"></div>
     </div>
 
     <!-- Toast notifications -->

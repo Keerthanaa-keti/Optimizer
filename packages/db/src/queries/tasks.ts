@@ -58,8 +58,19 @@ export function updateTaskStatus(db: Database.Database, id: number, status: Task
 }
 
 export function clearTasksForProject(db: Database.Database, projectPath: string): number {
+  // Delete child rows first to avoid FK constraint violations
+  db.prepare('DELETE FROM executions WHERE task_id IN (SELECT id FROM tasks WHERE project_path = ?)').run(projectPath);
+  db.prepare('UPDATE ledger SET task_id = NULL WHERE task_id IN (SELECT id FROM tasks WHERE project_path = ?)').run(projectPath);
+  db.prepare('UPDATE pool_transactions SET task_id = NULL WHERE task_id IN (SELECT id FROM tasks WHERE project_path = ?)').run(projectPath);
   const result = db.prepare('DELETE FROM tasks WHERE project_path = ?').run(projectPath);
   return result.changes;
+}
+
+export function deleteTask(db: Database.Database, id: number): void {
+  db.prepare('DELETE FROM executions WHERE task_id = ?').run(id);
+  db.prepare('UPDATE ledger SET task_id = NULL WHERE task_id = ?').run(id);
+  db.prepare('UPDATE pool_transactions SET task_id = NULL WHERE task_id = ?').run(id);
+  db.prepare('DELETE FROM tasks WHERE id = ?').run(id);
 }
 
 export function getTaskStats(db: Database.Database): { total: number; byStatus: Record<string, number>; bySource: Record<string, number> } {

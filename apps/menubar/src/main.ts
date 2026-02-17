@@ -3,13 +3,13 @@ import { menubar } from 'menubar';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
-import { getUsageData, getNightModeStatus, getMorningReport, getIntelligenceData, getSessionBudgetPlan } from './data.js';
+import { getUsageData, getNightModeStatus, getMorningReport, getIntelligenceData, getSessionBudgetPlan, getSubscriptionView, toggleNightModeConfig, getAllQueuedTasks } from './data.js';
 import { getAlerts } from './alerts.js';
 import { startServer } from '@creditforge/dashboard';
 import { checkAndNotify, type NotificationState } from './notifications.js';
 
 const WINDOW_WIDTH = 400;
-const WINDOW_HEIGHT = 720;
+const WINDOW_HEIGHT = 580;
 const REFRESH_INTERVAL_MS = 30_000;
 const DASHBOARD_PORT = 3141;
 const OPTIMIZER_ROOT = path.join(process.env.HOME ?? '~', 'Documents', 'ClaudeExperiments', 'optimizer');
@@ -90,6 +90,7 @@ function createMenubar() {
   ipcMain.handle('get-morning-report', () => getMorningReport());
   ipcMain.handle('get-intelligence', () => getIntelligenceData());
   ipcMain.handle('get-budget-plan', () => getSessionBudgetPlan());
+  ipcMain.handle('get-subscription-view', () => getSubscriptionView());
 
   // ─── Action IPC Handlers ─────────────────────────────────
 
@@ -148,6 +149,88 @@ function createMenubar() {
     return spawnCli(['run', '--mode', 'night', '--dry-run']);
   });
 
+  // ─── Task Management IPC Handlers ─────────────────────
+  ipcMain.handle('toggle-nightmode', () => {
+    const newState = toggleNightModeConfig();
+    return { enabled: newState };
+  });
+
+  ipcMain.handle('skip-task', (_event, taskId: number) => {
+    const dbPath = path.join(process.env.HOME ?? '~', '.creditforge', 'creditforge.db');
+    if (!fs.existsSync(dbPath)) return { success: false, error: 'DB not found' };
+    try {
+      const Database = require('better-sqlite3');
+      const db = new Database(dbPath);
+      db.prepare("UPDATE tasks SET status = 'skipped', updated_at = datetime('now') WHERE id = ?").run(taskId);
+      db.close();
+      return { success: true };
+    } catch (err: unknown) {
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  ipcMain.handle('delete-task', (_event, taskId: number) => {
+    const dbPath = path.join(process.env.HOME ?? '~', '.creditforge', 'creditforge.db');
+    if (!fs.existsSync(dbPath)) return { success: false, error: 'DB not found' };
+    try {
+      const Database = require('better-sqlite3');
+      const db = new Database(dbPath);
+      // Delete child rows first to avoid FK constraint violations
+      db.prepare('DELETE FROM executions WHERE task_id = ?').run(taskId);
+      db.prepare('UPDATE ledger SET task_id = NULL WHERE task_id = ?').run(taskId);
+      db.prepare('UPDATE pool_transactions SET task_id = NULL WHERE task_id = ?').run(taskId);
+      db.prepare('DELETE FROM tasks WHERE id = ?').run(taskId);
+      db.close();
+      return { success: true };
+    } catch (err: unknown) {
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  ipcMain.handle('get-all-tasks', () => {
+    return getAllQueuedTasks();
+  });
+
+  // --- Exclude Paths IPC Handlers ---
+  ipcMain.handle('get-exclude-paths', () => {
+    const configPath = path.join(OPTIMIZER_ROOT, 'creditforge.toml');
+    try {
+      const content = fs.readFileSync(configPath, 'utf-8');
+      const match = content.match(/exclude_paths\s*=\s*\[([\s\S]*?)\]/);
+      if (!match) return [];
+      return match[1].split(',')
+        .map(s => s.trim().replace(/^"|"$/g, ''))
+        .filter(s => s.length > 0);
+    } catch {
+      return [];
+    }
+  });
+
+  ipcMain.handle('set-exclude-paths', (_event, paths: string[]) => {
+    const configPath = path.join(OPTIMIZER_ROOT, 'creditforge.toml');
+    try {
+      let content = fs.readFileSync(configPath, 'utf-8');
+      const arrayStr = paths.length > 0
+        ? `[${paths.map(p => `"${p}"`).join(', ')}]`
+        : '[]';
+
+      if (content.includes('exclude_paths')) {
+        // Replace existing (handle multi-line arrays too)
+        content = content.replace(/exclude_paths\s*=\s*\[[\s\S]*?\]/, `exclude_paths = ${arrayStr}`);
+      } else {
+        // Add under [night_mode] section
+        content = content.replace(
+          /(\[night_mode\][^\[]*)/,
+          `$1exclude_paths = ${arrayStr}\n`,
+        );
+      }
+      fs.writeFileSync(configPath, content, 'utf-8');
+      return { success: true };
+    } catch (err: unknown) {
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
   const tray = new Tray(icon);
   tray.setToolTip('CreditForge');
 
@@ -188,6 +271,7 @@ function createMenubar() {
     // Update tray title periodically + check notifications
     setInterval(() => {
       try {
+        if (tray.isDestroyed()) return;
         const data = getUsageData();
         const nmStatus = getNightModeStatus();
         const queueLabel = nmStatus.queuedTasks > 0 ? ` [${nmStatus.queuedTasks}]` : '';
@@ -200,16 +284,22 @@ function createMenubar() {
 
     // Listen for theme changes
     nativeTheme.on('updated', () => {
-      mb.window?.webContents.send('theme-changed', nativeTheme.shouldUseDarkColors ? 'dark' : 'light');
+      if (mb.window && !mb.window.isDestroyed()) {
+        mb.window.webContents.send('theme-changed', nativeTheme.shouldUseDarkColors ? 'dark' : 'light');
+      }
     });
   });
 
   mb.on('after-show', () => {
-    mb.window?.webContents.send('refresh');
+    if (mb.window && !mb.window.isDestroyed()) {
+      mb.window.webContents.send('refresh');
+    }
 
     if (refreshTimer) clearInterval(refreshTimer);
     refreshTimer = setInterval(() => {
-      mb.window?.webContents.send('refresh');
+      if (mb.window && !mb.window.isDestroyed()) {
+        mb.window.webContents.send('refresh');
+      }
     }, REFRESH_INTERVAL_MS);
   });
 

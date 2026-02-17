@@ -48,6 +48,61 @@ export function getUsageData(): MenubarUsageData {
   };
 }
 
+// ─── Subscription View ──────────────────────────────
+
+const TIER_MONTHLY_SUB: Record<string, number> = { pro: 20, max5: 100, max20: 200 };
+
+export interface SubscriptionView {
+  tierLabel: string;
+  planMonthly: number;
+  planWeekly: number;
+  weeklyUsedSub: number;
+  weeklyRemainingSub: number;
+  weeklyPct: number;
+  weeklyResetLabel: string;
+  weeklyMsgs: number;
+  sessionSpentSub: number;
+  sessionPct: number;
+  sessionResetLabel: string;
+  sessionMsgs: number;
+  utilizationPct: number;
+  wastedWeeklySub: number;
+}
+
+export function getSubscriptionView(): SubscriptionView {
+  const tier = loadTier();
+  const usage = getUsagePercentages(tier);
+  const sessionReset = getSessionResetCountdown(usage.data.session.oldestTs);
+  const monthly = TIER_MONTHLY_SUB[tier] ?? 100;
+  const weekly = monthly * 12 / 52;  // $23.08 for max5
+
+  // Use the percentage as bridge: if 34% of API budget used, 34% of subscription used
+  const weeklyUsed = (usage.weeklyPct / 100) * weekly;
+  const weeklyRemaining = Math.max(weekly - weeklyUsed, 0);
+
+  // Session: map session cost to subscription dollars via weekly budget ratio
+  const sessionSub = usage.tier.weeklyBudget > 0
+    ? (usage.data.session.cost / usage.tier.weeklyBudget) * weekly
+    : 0;
+
+  return {
+    tierLabel: usage.tier.label,
+    planMonthly: monthly,
+    planWeekly: Math.round(weekly * 100) / 100,
+    weeklyUsedSub: Math.round(weeklyUsed * 100) / 100,
+    weeklyRemainingSub: Math.round(weeklyRemaining * 100) / 100,
+    weeklyPct: usage.weeklyPct,
+    weeklyResetLabel: getWeeklyResetLabel(6, 14, 30),
+    weeklyMsgs: usage.data.weekly.msgs,
+    sessionSpentSub: Math.round(sessionSub * 100) / 100,
+    sessionPct: usage.sessionPct,
+    sessionResetLabel: sessionReset.label,
+    sessionMsgs: usage.data.session.msgs,
+    utilizationPct: usage.weeklyPct,
+    wastedWeeklySub: Math.round(weeklyRemaining * 100) / 100,
+  };
+}
+
 // ─── Session Budget Planner ──────────────────────────
 
 // Approximate cost per message by model (USD, based on typical Claude usage)
@@ -114,6 +169,15 @@ export function getSessionBudgetPlan(): BudgetPlan {
 
 // ─── Night Mode / Task Queue Data ──────────────────────────
 
+export interface QueuedTask {
+  id: number;
+  title: string;
+  project: string;
+  score: number;
+  source: string;
+  category: string;
+}
+
 export interface NightModeStatus {
   queuedTasks: number;
   completedToday: number;
@@ -124,11 +188,38 @@ export interface NightModeStatus {
   nextRunAt: string;
   isEnabled: boolean;
   topTasks: Array<{ id: number; title: string; project: string; score: number }>;
+  // Subscription context
+  dailySubBudget: number;   // e.g. $3.29 for max5
+  nightSubBudget: number;   // 75% of daily = $2.47
+  nightHours: number;       // e.g. 7 (11PM-6AM)
+}
+
+function getNightModeSubContext() {
+  const tier = loadTier();
+  const monthly = TIER_MONTHLY_SUB[tier] ?? 100;
+  const dailySub = Math.round((monthly * 12 / 365) * 100) / 100;
+  // Read night mode config for cap % and hours
+  let capPct = 75;
+  let startHour = 23;
+  let endHour = 6;
+  try {
+    const content = fs.readFileSync(getConfigPath(), 'utf-8');
+    const capMatch = content.match(/credit_cap_percent\s*=\s*(\d+)/);
+    if (capMatch) capPct = parseInt(capMatch[1], 10);
+    const startMatch = content.match(/start_hour\s*=\s*(\d+)/);
+    if (startMatch) startHour = parseInt(startMatch[1], 10);
+    const endMatch = content.match(/end_hour\s*=\s*(\d+)/);
+    if (endMatch) endHour = parseInt(endMatch[1], 10);
+  } catch { /* use defaults */ }
+  const nightHours = (endHour + 24 - startHour) % 24;
+  const nightSubBudget = Math.round(dailySub * (capPct / 100) * 100) / 100;
+  return { dailySubBudget: dailySub, nightSubBudget, nightHours };
 }
 
 export function getNightModeStatus(): NightModeStatus {
   const cfDir = path.join(process.env.HOME ?? '~', '.creditforge');
   const dbPath = path.join(cfDir, 'creditforge.db');
+  const subCtx = getNightModeSubContext();
 
   // Default response if DB doesn't exist
   const defaults: NightModeStatus = {
@@ -141,6 +232,7 @@ export function getNightModeStatus(): NightModeStatus {
     nextRunAt: getNextRunTime(),
     isEnabled: isNightModeEnabled(),
     topTasks: [],
+    ...subCtx,
   };
 
   if (!fs.existsSync(dbPath)) return defaults;
@@ -148,7 +240,7 @@ export function getNightModeStatus(): NightModeStatus {
   try {
     // Use better-sqlite3 directly (avoid singleton conflicts with CLI)
     const Database = require('better-sqlite3');
-    const db = new Database(dbPath, { readonly: true });
+    const db = new Database(dbPath);
 
     const today = new Date().toISOString().split('T')[0];
 
@@ -191,22 +283,69 @@ export function getNightModeStatus(): NightModeStatus {
       nextRunAt: getNextRunTime(),
       isEnabled: isNightModeEnabled(),
       topTasks: topRows.map(r => ({ id: r.id, title: r.title, project: r.project_name, score: r.score })),
+      ...subCtx,
     };
   } catch {
     return defaults;
   }
 }
 
-function isNightModeEnabled(): boolean {
-  const configPath = path.join(
+function getConfigPath(): string {
+  return path.join(
     process.env.HOME ?? '~',
     'Documents', 'ClaudeExperiments', 'optimizer', 'creditforge.toml'
   );
+}
+
+function isNightModeEnabled(): boolean {
   try {
-    const content = fs.readFileSync(configPath, 'utf-8');
+    const content = fs.readFileSync(getConfigPath(), 'utf-8');
     return /enabled\s*=\s*true/.test(content);
   } catch {
     return false;
+  }
+}
+
+export function toggleNightModeConfig(): boolean {
+  const configPath = getConfigPath();
+  try {
+    let content = fs.readFileSync(configPath, 'utf-8');
+    const wasEnabled = /enabled\s*=\s*true/.test(content);
+    if (wasEnabled) {
+      content = content.replace(/enabled\s*=\s*true/, 'enabled = false');
+    } else {
+      content = content.replace(/enabled\s*=\s*false/, 'enabled = true');
+    }
+    fs.writeFileSync(configPath, content, 'utf-8');
+    return !wasEnabled;
+  } catch {
+    return false;
+  }
+}
+
+export function getAllQueuedTasks(): QueuedTask[] {
+  const dbPath = path.join(process.env.HOME ?? '~', '.creditforge', 'creditforge.db');
+  if (!fs.existsSync(dbPath)) return [];
+
+  try {
+    const Database = require('better-sqlite3');
+    const db = new Database(dbPath);
+
+    const rows = db.prepare(
+      'SELECT id, title, project_name, score, source, category FROM tasks WHERE status = ? ORDER BY score DESC'
+    ).all('queued') as Array<{ id: number; title: string; project_name: string; score: number; source: string; category: string }>;
+
+    db.close();
+    return rows.map(r => ({
+      id: r.id,
+      title: r.title,
+      project: r.project_name,
+      score: r.score,
+      source: r.source,
+      category: r.category,
+    }));
+  } catch {
+    return [];
   }
 }
 
@@ -277,7 +416,7 @@ export function getIntelligenceData(): IntelligenceDataWithActionable {
   if (fs.existsSync(dbPath)) {
     try {
       const Database = require('better-sqlite3');
-      db = new Database(dbPath, { readonly: true });
+      db = new Database(dbPath);
     } catch {
       // DB unavailable — proceed without task learning
     }

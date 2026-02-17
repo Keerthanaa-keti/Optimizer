@@ -3,6 +3,7 @@
 const $ = (id) => document.getElementById(id);
 
 let launchdInstalled = false;
+let taskListExpanded = false;
 
 function barColor(pct) {
   if (pct >= 80) return '#ff3b30';
@@ -27,98 +28,53 @@ function showToast(message, type = 'info') {
   }, 3000);
 }
 
-// ─── Budget Planner ─────────────────────────────────────
+// ─── Subscription View Rendering ────────────────────────
 
-function renderBudgetPlan(plan) {
-  const section = $('budget-section');
-  if (!plan || plan.remainingBudget <= 0) {
-    section.style.display = 'none';
-    return;
-  }
+function renderSubscriptionView(sv) {
+  // Hero
+  $('sub-plan-monthly').textContent = `$${sv.planMonthly}/month`;
+  $('sub-plan-weekly').textContent = `$${sv.planWeekly.toFixed(2)}`;
 
-  section.style.display = 'block';
-  const grid = $('budget-grid');
-  grid.innerHTML = plan.models.map(m =>
-    `<div class="budget-cell">
-      <span class="budget-count">~${m.estimatedMessages}</span>
-      <span class="budget-model">${m.displayName}</span>
-    </div>`
-  ).join('');
+  // This Week card
+  const weeklyFill = $('sub-weekly-fill');
+  weeklyFill.style.width = Math.min(sv.weeklyPct, 100) + '%';
+  weeklyFill.style.background = barColor(sv.weeklyPct);
+  $('sub-weekly-pct').textContent = sv.weeklyPct + '%';
+  $('sub-weekly-msgs').textContent = sv.weeklyMsgs + ' msgs';
+  $('sub-weekly-used').textContent = `$${sv.weeklyUsedSub.toFixed(2)} used`;
+  $('sub-weekly-remaining').textContent = `$${sv.weeklyRemainingSub.toFixed(2)} left`;
+  $('sub-weekly-reset').textContent = sv.weeklyResetLabel;
 
-  $('budget-rec').textContent = plan.recommendation;
-}
+  // Current Session card
+  const sessionFill = $('sub-session-fill');
+  sessionFill.style.width = Math.min(sv.sessionPct, 100) + '%';
+  sessionFill.style.background = barColor(sv.sessionPct);
+  $('sub-session-pct').textContent = sv.sessionPct + '%';
+  $('sub-session-spent').textContent = `$${sv.sessionSpentSub.toFixed(2)} spent this session`;
+  $('sub-session-msgs').textContent = sv.sessionMsgs + ' msgs';
+  $('sub-session-reset').textContent = sv.sessionResetLabel;
 
-// ─── Usage Rendering ────────────────────────────────────
-
-function renderUsage(data) {
-  // Session
-  const sessionFill = $('session-fill');
-  sessionFill.style.width = Math.min(data.sessionPct, 100) + '%';
-  sessionFill.style.background = barColor(data.sessionPct);
-  $('session-pct').textContent = data.sessionPct + '% used';
-  $('session-reset').textContent = data.sessionResetLabel;
-
-  // Weekly
-  const weeklyFill = $('weekly-fill');
-  weeklyFill.style.width = Math.min(data.weeklyPct, 100) + '%';
-  weeklyFill.style.background = barColor(data.weeklyPct);
-  $('weekly-pct').textContent = data.weeklyPct + '% used';
-  $('weekly-reset').textContent = data.weeklyResetLabel;
-
-  // Sonnet
-  $('sonnet-fill').style.width = Math.min(data.sonnetPct, 100) + '%';
-  $('sonnet-pct').textContent = data.sonnetPct + '% used';
-  $('sonnet-reset').textContent = data.sonnetResetLabel;
-
-  // Model breakdown
-  const models = Object.entries(data.data.session.byModel)
-    .sort((a, b) => b[1] - a[1]);
-
-  const modelSection = $('model-breakdown');
-  if (models.length > 0) {
-    const sessionBudget = data.tier.sessionBudget;
-    modelSection.innerHTML = models.map(([name, cost]) => {
-      const pct = sessionBudget > 0 ? (cost / sessionBudget * 100).toFixed(1) : '0';
-      return `<div class="model-row">
-        <span class="model-name">${name}</span>
-        <span class="model-pct">${pct}%</span>
-      </div>`;
-    }).join('');
-    modelSection.style.display = 'block';
+  // Subscription Value card
+  const utilPct = $('sub-util-pct');
+  utilPct.textContent = `${sv.utilizationPct}% utilized this week`;
+  if (sv.utilizationPct >= 70) {
+    utilPct.className = 'sub-value-pct val-green';
+  } else if (sv.utilizationPct >= 40) {
+    utilPct.className = 'sub-value-pct val-yellow';
   } else {
-    modelSection.style.display = 'none';
+    utilPct.className = 'sub-value-pct val-red';
   }
 
-  // Activity
-  $('session-msgs').textContent = `Session: ${data.data.session.msgs} msgs`;
-  $('weekly-msgs').textContent = `Weekly: ${data.data.weekly.msgs}`;
-
-  const activeRow = $('active-sessions-row');
-  if (data.data.activeSessions > 0) {
-    activeRow.style.display = 'flex';
-    const count = data.data.activeSessions;
-    $('active-sessions-text').textContent = `${count} active session${count > 1 ? 's' : ''}`;
+  const wasteEl = $('sub-waste');
+  if (sv.utilizationPct < 50 && sv.wastedWeeklySub > 2) {
+    wasteEl.textContent = `~$${sv.wastedWeeklySub.toFixed(0)}/week going unused`;
+    wasteEl.style.display = 'block';
   } else {
-    activeRow.style.display = 'none';
+    wasteEl.style.display = 'none';
   }
 
-  // Tier label
-  $('tier-label').textContent = data.tier.label;
-}
-
-function renderAlerts(alerts) {
-  const container = $('alerts-container');
-  if (!alerts || alerts.length === 0) {
-    container.innerHTML = '';
-    return;
-  }
-
-  container.innerHTML = alerts.map((alert) => `
-    <div class="alert alert-${alert.level}">
-      <div class="alert-title">${alert.title}</div>
-      <div class="alert-message">${alert.message}</div>
-    </div>
-  `).join('');
+  // Tier label in footer
+  $('tier-label').textContent = sv.tierLabel;
 }
 
 // ─── Night Mode Rendering ───────────────────────────────
@@ -136,9 +92,11 @@ function renderNightMode(nm) {
     actionsEl.style.display = 'flex';
   }
 
-  // Status
-  $('nm-status').textContent = nm.isEnabled ? 'Enabled' : 'Disabled';
-  $('nm-status').className = 'nm-value ' + (nm.isEnabled ? 'nm-enabled' : 'nm-disabled');
+  // Toggle switch
+  const toggleInput = $('nm-toggle-input');
+  const toggleLabel = $('nm-toggle-label');
+  toggleInput.checked = nm.isEnabled;
+  toggleLabel.textContent = nm.isEnabled ? 'Enabled' : 'Disabled';
 
   // Next run
   $('nm-next-run').textContent = nm.isEnabled ? nm.nextRunAt : '--';
@@ -146,99 +104,121 @@ function renderNightMode(nm) {
   // Queued
   $('nm-queued').textContent = nm.queuedTasks;
 
+  // Subscription context
+  if (nm.nightSubBudget) {
+    $('nm-sub-budget').textContent = `$${nm.nightSubBudget.toFixed(2)} of $${nm.dailySubBudget.toFixed(2)}/day`;
+  }
+  if (nm.nightHours) {
+    $('nm-window').textContent = `${nm.nightHours}h overnight`;
+  }
+
+  // View All link
+  const viewAllBtn = $('nm-view-all');
+  const viewAllCount = $('nm-view-all-count');
+  if (nm.queuedTasks > 5) {
+    viewAllBtn.style.display = 'inline';
+    viewAllCount.textContent = nm.queuedTasks;
+    viewAllBtn.textContent = taskListExpanded ? 'Show Less' : `View All (${nm.queuedTasks})`;
+  } else {
+    viewAllBtn.style.display = 'none';
+  }
+
   // Today's results
   if (nm.completedToday > 0 || nm.failedToday > 0) {
-    const spent = (nm.totalSpentToday / 100).toFixed(2);
-    $('nm-today').textContent = `${nm.completedToday} done, ${nm.failedToday} failed ($${spent})`;
+    $('nm-today').textContent = `${nm.completedToday} done, ${nm.failedToday} failed`;
   } else {
     $('nm-today').textContent = 'No runs today';
   }
 
-  // Top tasks with run buttons
+  // Top tasks with run/skip/delete buttons
   const taskList = $('nm-task-list');
   const taskContainer = $('nm-top-tasks');
-  if (nm.topTasks && nm.topTasks.length > 0) {
+  const tasks = nm.topTasks && nm.topTasks.length > 0 ? nm.topTasks : [];
+  if (tasks.length > 0) {
     taskContainer.style.display = 'block';
-    taskList.innerHTML = nm.topTasks.map(t =>
-      `<div class="nm-task-row">
-        <span class="nm-task-name" title="${t.title}">${t.project}: ${truncate(t.title, 30)}</span>
-        <span class="nm-task-score">${t.score.toFixed(1)}</span>
-        <button class="btn-run-task" data-task-id="${t.id}" title="Run this task">Run</button>
-      </div>`
-    ).join('');
+    renderTaskRows(taskList, tasks);
   } else {
     taskContainer.style.display = 'none';
   }
 }
 
-function renderReport(report) {
-  const section = $('report-section');
-  if (!report || !report.exists) {
-    section.style.display = 'none';
-    return;
-  }
-
-  section.style.display = 'block';
-  // Parse markdown report into simple HTML
-  const lines = report.content.split('\n').slice(0, 15); // First 15 lines
-  const html = lines.map(line => {
-    if (line.startsWith('# ')) return `<div class="report-h1">${line.slice(2)}</div>`;
-    if (line.startsWith('## ')) return `<div class="report-h2">${line.slice(3)}</div>`;
-    if (line.startsWith('- ')) return `<div class="report-item">${line}</div>`;
-    if (line.trim() === '') return '';
-    return `<div class="report-line">${line}</div>`;
-  }).join('');
-  $('report-content').innerHTML = html;
+function renderTaskRows(container, tasks) {
+  container.innerHTML = tasks.map(t =>
+    `<div class="nm-task-row" data-task-id="${t.id}">
+      <span class="nm-task-name" title="${t.title}">${t.project}: ${truncate(t.title, 24)}</span>
+      <span class="nm-task-score">${t.score.toFixed(1)}</span>
+      <div class="nm-task-actions">
+        <button class="btn-run-task" data-task-id="${t.id}" title="Run">Run</button>
+        <button class="btn-skip" data-task-id="${t.id}" title="Skip">Skip</button>
+        <button class="btn-delete" data-task-id="${t.id}" title="Delete">&times;</button>
+      </div>
+    </div>`
+  ).join('');
 }
 
-function renderInsights(ins) {
-  if (!ins || !ins.actionable) return;
-
-  const a = ins.actionable;
-
-  // Utilization meter
-  const pctEl = $('ins-util-pct');
-  pctEl.textContent = `${a.utilizationPct}% utilized`;
-  if (a.utilizationPct >= 70) {
-    pctEl.className = 'utilization-pct util-green';
-  } else if (a.utilizationPct >= 40) {
-    pctEl.className = 'utilization-pct util-yellow';
-  } else {
-    pctEl.className = 'utilization-pct util-red';
+async function loadAllTasks() {
+  try {
+    const tasks = await window.creditforge.getAllTasks();
+    const taskList = $('nm-task-list');
+    taskList.classList.add('nm-task-list-scroll');
+    renderTaskRows(taskList, tasks);
+  } catch (err) {
+    showToast('Failed to load tasks', 'error');
   }
+}
 
-  // Dollar context — show in terms of actual subscription cost, not compute cost
-  const weeklySub = a.subscriptionCostWeekly;
-  const usedOfSub = Math.round(weeklySub * a.utilizationPct) / 100;
-  const wastedOfSub = Math.max(weeklySub - usedOfSub, 0);
-  $('ins-util-context').textContent =
-    `~$${usedOfSub.toFixed(0)} of your $${Math.round(weeklySub)}/week subscription used`;
-
-  // Waste callout (only when >50% unused)
-  const wasteEl = $('ins-waste');
-  if (a.utilizationPct < 50 && wastedOfSub > 2) {
-    wasteEl.textContent = `~$${wastedOfSub.toFixed(0)}/week going unused`;
-    wasteEl.style.display = 'block';
-  } else {
-    wasteEl.style.display = 'none';
+async function handleSkipTask(taskId, rowEl) {
+  try {
+    const result = await window.creditforge.skipTask(taskId);
+    if (result.success) {
+      rowEl.classList.add('removing');
+      setTimeout(() => {
+        rowEl.remove();
+        refreshAfterTaskChange();
+      }, 300);
+    } else {
+      showToast('Skip failed: ' + (result.error || ''), 'error');
+    }
+  } catch (err) {
+    showToast('Skip error: ' + err.message, 'error');
   }
+}
 
-  // Action card
-  const card = $('ins-action-card');
-  card.className = 'action-card action-' + a.action.urgency;
-  $('ins-action-headline').textContent = a.action.headline;
-  $('ins-action-detail').textContent = a.action.detail;
+async function handleDeleteTask(taskId, rowEl) {
+  try {
+    const result = await window.creditforge.deleteTask(taskId);
+    if (result.success) {
+      rowEl.classList.add('removing');
+      setTimeout(() => {
+        rowEl.remove();
+        refreshAfterTaskChange();
+      }, 300);
+    } else {
+      showToast('Delete failed: ' + (result.error || ''), 'error');
+    }
+  } catch (err) {
+    showToast('Delete error: ' + err.message, 'error');
+  }
+}
 
-  // Quick stats — burn rate
-  $('ins-burn-rate').textContent = `$${a.burnRatePerHr.toFixed(2)}/hr`;
-
-  // Quick stats — best window
-  const windowStat = $('ins-best-window-stat');
-  if (a.bestWindow) {
-    windowStat.style.display = 'flex';
-    $('ins-best-window').textContent = a.bestWindow;
+async function refreshAfterTaskChange() {
+  const nm = await window.creditforge.getNightModeStatus();
+  // Update queued count and view-all
+  $('nm-queued').textContent = nm.queuedTasks;
+  const viewAllBtn = $('nm-view-all');
+  if (nm.queuedTasks > 5) {
+    viewAllBtn.style.display = 'inline';
+    viewAllBtn.textContent = taskListExpanded ? 'Show Less' : `View All (${nm.queuedTasks})`;
   } else {
-    windowStat.style.display = 'none';
+    viewAllBtn.style.display = 'none';
+    if (taskListExpanded) {
+      taskListExpanded = false;
+      $('nm-task-list').classList.remove('nm-task-list-scroll');
+    }
+  }
+  // If expanded, reload all; otherwise leave current rows
+  if (taskListExpanded) {
+    await loadAllTasks();
   }
 }
 
@@ -246,28 +226,63 @@ function truncate(str, len) {
   return str.length > len ? str.slice(0, len) + '...' : str;
 }
 
+// ─── Morning Report Banner ──────────────────────────────
+
+function renderReportBanner(report) {
+  const banner = $('morning-report-banner');
+  if (!report || !report.exists) {
+    banner.style.display = 'none';
+    return;
+  }
+
+  // Parse success/fail counts from report markdown
+  const successMatch = report.content.match(/Succeeded:\s*(\d+)/);
+  const failMatch = report.content.match(/Failed:\s*(\d+)/);
+  const succeeded = successMatch ? parseInt(successMatch[1], 10) : 0;
+  const failed = failMatch ? parseInt(failMatch[1], 10) : 0;
+
+  $('nm-report-summary').textContent = `Night run: ${succeeded} done, ${failed} failed`;
+  banner.style.display = 'flex';
+}
+
+// ─── Exclude Paths ──────────────────────────────────────
+
+async function loadExcludePaths() {
+  try {
+    const paths = await window.creditforge.getExcludePaths();
+    renderExcludePaths(paths);
+  } catch {
+    renderExcludePaths([]);
+  }
+}
+
+function renderExcludePaths(paths) {
+  const list = $('nm-exclude-list');
+  if (paths.length === 0) {
+    list.innerHTML = '<div class="nm-exclude-empty">No excluded paths</div>';
+    return;
+  }
+  list.innerHTML = paths.map(p =>
+    `<div class="nm-exclude-item">
+      <span class="nm-exclude-path" title="${p}">${p}</span>
+      <button class="nm-exclude-remove" data-path="${p}" title="Remove">&times;</button>
+    </div>`
+  ).join('');
+}
+
 // ─── Refresh ────────────────────────────────────────────
 
 async function refresh() {
   try {
-    const [data, nm, report, intelligence, budgetPlan] = await Promise.all([
-      window.creditforge.getUsageData(),
+    const [sv, nm, report] = await Promise.all([
+      window.creditforge.getSubscriptionView(),
       window.creditforge.getNightModeStatus(),
       window.creditforge.getMorningReport(),
-      window.creditforge.getIntelligence(),
-      window.creditforge.getBudgetPlan(),
     ]);
 
-    renderUsage(data);
+    renderSubscriptionView(sv);
     renderNightMode(nm);
-    renderReport(report);
-    renderInsights(intelligence);
-    renderBudgetPlan(budgetPlan);
-
-    // Pass burn rate to alerts for predictive messaging
-    const burnRateJson = intelligence?.burnRate ? JSON.stringify(intelligence.burnRate) : undefined;
-    const alerts = await window.creditforge.getAlerts(JSON.stringify(data), burnRateJson);
-    renderAlerts(alerts);
+    renderReportBanner(report);
   } catch (err) {
     console.error('Refresh failed:', err);
   }
@@ -335,38 +350,46 @@ function parseScanOutput(stdout) {
 function parsePlanOutput(stdout) {
   let html = '';
 
-  // Extract plan summary
+  // Extract plan summary — new subscription-dollar format
   const planned = stdout.match(/Planned for execution:\s*(\d+)/);
   const queued = stdout.match(/Queued tasks:\s*(\d+)/);
-  const budget = stdout.match(/Budget cap:\s*(\$[\d.]+)/);
-  const cost = stdout.match(/Estimated cost:\s*(\$[\d.]+)/);
+  const planLine = stdout.match(/Your plan:\s*(.+)/);
+  const nightBudget = stdout.match(/Night budget:\s*(\$[\d.]+)\s*\((.+?)\)/);
   const duration = stdout.match(/Estimated duration:\s*~?(.+)/);
+  const recovery = stdout.match(/Recovery value:\s*~?(\$[\d.]+)\s*of\s*(.+)/);
   const branch = stdout.match(/Branch:\s*(.+)/);
+
+  // Also support legacy format for backward compatibility
+  const legacyBudget = stdout.match(/Budget cap:\s*(\$[\d.]+)/);
+  const legacyCost = stdout.match(/Estimated cost:\s*(\$[\d.]+)/);
 
   html += `<div class="results-stat-row">`;
   if (planned) html += `<span class="results-stat"><strong>${planned[1]}</strong> planned</span>`;
   if (queued) html += `<span class="results-stat">${queued[1]} queued</span>`;
   html += `</div>`;
 
-  if (budget || cost || duration) {
-    html += `<div class="results-kv-group">`;
-    if (budget) html += `<div class="results-kv"><span>Budget cap</span><span>${budget[1]}</span></div>`;
-    if (cost) html += `<div class="results-kv"><span>Est. cost</span><span>${cost[1]}</span></div>`;
-    if (duration) html += `<div class="results-kv"><span>Est. time</span><span>${duration[1].trim()}</span></div>`;
-    if (branch) html += `<div class="results-kv"><span>Branch</span><span class="results-mono">${branch[1].trim()}</span></div>`;
-    html += `</div>`;
-  }
+  html += `<div class="results-kv-group">`;
+  if (planLine) html += `<div class="results-kv"><span>Your plan</span><span>${planLine[1].trim()}</span></div>`;
+  if (nightBudget) html += `<div class="results-kv"><span>Night budget</span><span>${nightBudget[1]} <small style="color:var(--text-secondary)">(${nightBudget[2]})</small></span></div>`;
+  if (legacyBudget && !nightBudget) html += `<div class="results-kv"><span>Budget cap</span><span>${legacyBudget[1]}</span></div>`;
+  if (legacyCost && !recovery) html += `<div class="results-kv"><span>Est. cost</span><span>${legacyCost[1]}</span></div>`;
+  if (duration) html += `<div class="results-kv"><span>Duration</span><span>${duration[1].trim()}</span></div>`;
+  if (recovery) html += `<div class="results-kv"><span>Recovery value</span><span style="color:var(--bar-green);font-weight:600">${recovery[1]}</span></div>`;
+  if (branch) html += `<div class="results-kv"><span>Branch</span><span class="results-mono">${branch[1].trim()}</span></div>`;
+  html += `</div>`;
 
-  // Extract execution order
+  // Extract execution order (with optional task IDs like #42)
   const orderSection = stdout.match(/Execution order:\n([\s\S]*?)(?:\n\[DRY RUN\]|$)/);
   if (orderSection) {
     const taskLines = orderSection[1].trim().split('\n').filter(l => l.trim());
     if (taskLines.length > 0) {
       html += `<div class="results-label">Tonight's plan</div>`;
       html += taskLines.map(l => {
-        const m = l.trim().match(/^\d+\.\s*\[([^\]]+)\]\s*(.+?)\s*\|\s*(.+)$/);
+        const m = l.trim().match(/^\d+\.\s*\[([^\]]+)\]\s*(.+?)\s*\|\s*(.+?)(?:\s*\(#(\d+)\))?\s*$/);
         if (!m) return '';
-        return `<div class="results-task"><span class="results-task-score">${m[1]}</span><span class="results-task-name">${m[2]}: ${truncate(m[3], 28)}</span></div>`;
+        const taskIdAttr = m[4] ? ` data-plan-task-id="${m[4]}"` : '';
+        const skipBtn = m[4] ? `<button class="btn-skip btn-plan-skip" data-task-id="${m[4]}">Skip</button>` : '';
+        return `<div class="results-task"${taskIdAttr}><span class="results-task-score">${m[1]}</span><span class="results-task-name">${m[2]}: ${truncate(m[3], 24)}</span>${skipBtn}</div>`;
       }).join('');
     }
   }
@@ -395,6 +418,99 @@ function setButtonLoading(btn, loading) {
   }
 }
 
+// ─── Night Mode Toggle ──────────────────────────────────
+$('nm-toggle-input').addEventListener('change', async () => {
+  const toggleInput = $('nm-toggle-input');
+  const toggleLabel = $('nm-toggle-label');
+  try {
+    const result = await window.creditforge.toggleNightMode();
+    toggleInput.checked = result.enabled;
+    toggleLabel.textContent = result.enabled ? 'Enabled' : 'Disabled';
+    $('nm-next-run').textContent = result.enabled ? (await window.creditforge.getNightModeStatus()).nextRunAt : '--';
+    showToast(`Night Mode ${result.enabled ? 'enabled' : 'disabled'}`, 'success');
+  } catch (err) {
+    // Revert on error
+    toggleInput.checked = !toggleInput.checked;
+    showToast('Toggle failed: ' + err.message, 'error');
+  }
+});
+
+// ─── View All Tasks ─────────────────────────────────────
+$('nm-view-all').addEventListener('click', async () => {
+  if (taskListExpanded) {
+    taskListExpanded = false;
+    $('nm-task-list').classList.remove('nm-task-list-scroll');
+    $('nm-view-all').textContent = `View All (${$('nm-queued').textContent})`;
+    refresh();
+  } else {
+    taskListExpanded = true;
+    $('nm-view-all').textContent = 'Show Less';
+    await loadAllTasks();
+  }
+});
+
+// ─── Skip/Delete Task (delegated) ──────────────────────
+$('nm-task-list').addEventListener('click', async (e) => {
+  const skipBtn = e.target.closest('.btn-skip');
+  if (skipBtn) {
+    const taskId = parseInt(skipBtn.dataset.taskId, 10);
+    const row = skipBtn.closest('.nm-task-row');
+    if (!isNaN(taskId) && row) {
+      await handleSkipTask(taskId, row);
+    }
+    return;
+  }
+
+  const deleteBtn = e.target.closest('.btn-delete');
+  if (deleteBtn) {
+    const taskId = parseInt(deleteBtn.dataset.taskId, 10);
+    const row = deleteBtn.closest('.nm-task-row');
+    if (!isNaN(taskId) && row) {
+      await handleDeleteTask(taskId, row);
+    }
+    return;
+  }
+});
+
+// ─── Plan Review Skip (delegated on results panel) ─────
+$('nm-results-body').addEventListener('click', async (e) => {
+  const skipBtn = e.target.closest('.btn-plan-skip');
+  if (!skipBtn) return;
+
+  const taskId = parseInt(skipBtn.dataset.taskId, 10);
+  if (isNaN(taskId)) return;
+
+  skipBtn.disabled = true;
+  skipBtn.textContent = '...';
+  try {
+    const result = await window.creditforge.skipTask(taskId);
+    if (result.success) {
+      const row = skipBtn.closest('.results-task');
+      if (row) row.remove();
+      showToast(`Task #${taskId} skipped`, 'success');
+      // Re-run preview to regenerate plan
+      const planResult = await window.creditforge.runNightDryRun();
+      if (planResult.exitCode === 0) {
+        $('nm-results-body').innerHTML = parsePlanOutput(planResult.stdout);
+      }
+      refreshAfterTaskChange();
+    } else {
+      showToast('Skip failed', 'error');
+      skipBtn.disabled = false;
+      skipBtn.textContent = 'Skip';
+    }
+  } catch (err) {
+    showToast('Skip error: ' + err.message, 'error');
+    skipBtn.disabled = false;
+    skipBtn.textContent = 'Skip';
+  }
+});
+
+// View Report button opens dashboard
+$('btn-view-report').addEventListener('click', () => {
+  window.creditforge.openDashboard();
+});
+
 // Close results panel
 $('nm-results-close').addEventListener('click', hideResults);
 
@@ -415,6 +531,47 @@ $('btn-install-launchd').addEventListener('click', async () => {
     showToast('Install error: ' + err.message, 'error');
   } finally {
     setButtonLoading(btn, false);
+  }
+});
+
+// Add exclude path
+$('nm-exclude-add').addEventListener('click', async () => {
+  const newPath = prompt('Enter path to exclude from Night Mode:\n(e.g. ~/Documents/ClaudeExperiments/GitCode)');
+  if (!newPath || !newPath.trim()) return;
+  try {
+    const current = await window.creditforge.getExcludePaths();
+    if (current.includes(newPath.trim())) {
+      showToast('Path already excluded', 'info');
+      return;
+    }
+    const updated = [...current, newPath.trim()];
+    const result = await window.creditforge.setExcludePaths(updated);
+    if (result.success) {
+      renderExcludePaths(updated);
+      showToast('Path excluded', 'success');
+    } else {
+      showToast('Failed: ' + (result.error || ''), 'error');
+    }
+  } catch (err) {
+    showToast('Error: ' + err.message, 'error');
+  }
+});
+
+// Remove exclude path (delegated)
+$('nm-exclude-list').addEventListener('click', async (e) => {
+  const removeBtn = e.target.closest('.nm-exclude-remove');
+  if (!removeBtn) return;
+  const pathToRemove = removeBtn.dataset.path;
+  try {
+    const current = await window.creditforge.getExcludePaths();
+    const updated = current.filter(p => p !== pathToRemove);
+    const result = await window.creditforge.setExcludePaths(updated);
+    if (result.success) {
+      renderExcludePaths(updated);
+      showToast('Path removed', 'success');
+    }
+  } catch (err) {
+    showToast('Error: ' + err.message, 'error');
   }
 });
 
@@ -515,6 +672,9 @@ window.creditforge.onThemeChanged((theme) => {
   } catch {
     launchdInstalled = false;
   }
+
+  // Load exclude paths
+  loadExcludePaths();
 
   refresh();
 })();

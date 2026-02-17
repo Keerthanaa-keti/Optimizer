@@ -21,6 +21,14 @@ export interface ExecutionResult {
   modelChoice?: ModelChoice;
 }
 
+export interface SafetyCommitResult {
+  projectPath: string;
+  skipped: boolean;
+  reason?: string;
+  commitHash?: string;
+  branch?: string;
+}
+
 const DEFAULT_CONFIG: ExecutorConfig = {
   cli: {},
   nightPlanner: {},
@@ -44,6 +52,59 @@ export class Executor {
 
   get nightPlanner(): NightPlanner {
     return this.planner;
+  }
+
+  /**
+   * Pre-flight safety commit: saves any uncommitted changes on the current branch before night mode touches a project.
+   */
+  safetyCommit(projectPath: string): SafetyCommitResult {
+    const resolved = projectPath.replace(/^~/, process.env.HOME ?? '');
+
+    // Must be a git repo
+    if (!fs.existsSync(path.join(resolved, '.git'))) {
+      return { projectPath, skipped: true, reason: 'not a git repo' };
+    }
+
+    try {
+      // Check for uncommitted changes
+      const status = execSync('git status --porcelain', {
+        cwd: resolved,
+        encoding: 'utf-8',
+      }).trim();
+
+      if (!status) {
+        return { projectPath, skipped: true, reason: 'clean working tree' };
+      }
+
+      // Get current branch name
+      const branch = execSync('git rev-parse --abbrev-ref HEAD', {
+        cwd: resolved,
+        encoding: 'utf-8',
+      }).trim();
+
+      // Stage and commit on current branch
+      execSync('git add -A', { cwd: resolved, stdio: 'pipe' });
+
+      const date = new Date().toISOString().split('T')[0];
+      const commitMsg = `CreditForge: auto-save before night run [${date}]`;
+      const result = spawnSync('git', ['commit', '-m', commitMsg], {
+        cwd: resolved,
+        stdio: 'pipe',
+      });
+
+      if (result.status !== 0) {
+        return { projectPath, skipped: true, reason: 'commit failed' };
+      }
+
+      const hash = execSync('git rev-parse HEAD', {
+        cwd: resolved,
+        encoding: 'utf-8',
+      }).trim();
+
+      return { projectPath, skipped: false, commitHash: hash, branch };
+    } catch {
+      return { projectPath, skipped: true, reason: 'git error' };
+    }
   }
 
   /**
@@ -150,7 +211,7 @@ export class Executor {
   /**
    * Generate a morning report from execution results.
    */
-  generateMorningReport(results: ExecutionResult[]): string {
+  generateMorningReport(results: ExecutionResult[], safetyCommits?: SafetyCommitResult[]): string {
     const succeeded = results.filter((r) => r.success);
     const failed = results.filter((r) => !r.success);
     const totalCost = results.reduce((sum, r) => sum + r.execution.costUsdCents, 0);
@@ -205,11 +266,24 @@ export class Executor {
       lines.push('');
     }
 
+    // Pre-flight safety commits section
+    if (safetyCommits && safetyCommits.length > 0) {
+      const saved = safetyCommits.filter(s => !s.skipped);
+      if (saved.length > 0) {
+        lines.push('## Pre-flight Safety Commits');
+        for (const s of saved) {
+          lines.push(`- ${s.projectPath} (${s.branch}) → ${s.commitHash?.slice(0, 8)}`);
+        }
+        lines.push('');
+      }
+    }
+
     lines.push('## Review');
     lines.push('Changes are on nightmode/ branches. Review and merge at your convenience.');
     const projects = [...new Set(succeeded.map((r) => r.task.projectPath))];
+    const branch = this.planner.getBranchName();
     for (const proj of projects) {
-      lines.push(`- cd ${proj} && git log nightmode/ --oneline`);
+      lines.push(`Project: ${proj} | Branch: ${branch}`);
     }
 
     return lines.join('\n');
