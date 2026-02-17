@@ -109,7 +109,7 @@ else
 
   SCAN_ROOTS=()
   while true; do
-    read -p "  Project folder (or Enter to finish): " folder
+    read -p "  Project folder (or Enter to finish): " folder < /dev/tty
     if [ -z "$folder" ]; then
       break
     fi
@@ -145,7 +145,7 @@ else
   echo "    1) Pro ($20/month)"
   echo "    2) Max 5x ($100/month)  [default]"
   echo "    3) Max 20x ($200/month)"
-  read -p "  Choice [2]: " tier_choice
+  read -p "  Choice [2]: " tier_choice < /dev/tty
   case "$tier_choice" in
     1) TIER="pro" ;;
     3) TIER="max20" ;;

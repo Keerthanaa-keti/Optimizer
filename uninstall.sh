@@ -50,7 +50,7 @@ echo "  Database: $CONFIG_DIR/creditforge.db"
 echo "  Logs:     $CONFIG_DIR/logs/"
 echo "  Reports:  $CONFIG_DIR/reports/"
 echo ""
-read -p "Delete user data too? (y/N) " -n 1 -r
+read -p "Delete user data too? (y/N) " -n 1 -r < /dev/tty
 echo ""
 
 if [[ $REPLY =~ ^[Yy]$ ]]; then
