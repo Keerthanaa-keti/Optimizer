@@ -98,10 +98,63 @@ mkdir -p "$LOG_DIR" "$REPORT_DIR"
 if [ -f "$CONFIG_FILE" ]; then
   ok "Config exists at $CONFIG_FILE (preserved)"
 else
-  info "Creating default config..."
-  cat > "$CONFIG_FILE" << 'TOML'
+  info "Creating config..."
+
+  # ─── Interactive: Ask for project folders ────────────
+  echo ""
+  echo -e "${BLUE}  Where are your Claude projects?${NC}"
+  echo "  Enter folder paths to scan (one per line)."
+  echo "  Press Enter on an empty line when done."
+  echo ""
+
+  SCAN_ROOTS=()
+  while true; do
+    read -p "  Project folder (or Enter to finish): " folder
+    if [ -z "$folder" ]; then
+      break
+    fi
+    # Expand ~ to $HOME
+    expanded="${folder/#\~/$HOME}"
+    if [ -d "$expanded" ]; then
+      SCAN_ROOTS+=("$folder")
+      ok "Added: $folder"
+    else
+      warn "Directory not found: $expanded (added anyway — you can fix later)"
+      SCAN_ROOTS+=("$folder")
+    fi
+  done
+
+  # Build scan_roots TOML array
+  if [ ${#SCAN_ROOTS[@]} -eq 0 ]; then
+    SCAN_ROOTS_TOML='scan_roots = []'
+    warn "No project folders added. Edit $CONFIG_FILE later to add them."
+  else
+    SCAN_ROOTS_TOML="scan_roots = ["
+    for i in "${!SCAN_ROOTS[@]}"; do
+      if [ $i -gt 0 ]; then
+        SCAN_ROOTS_TOML+=","
+      fi
+      SCAN_ROOTS_TOML+=$'\n'"  \"${SCAN_ROOTS[$i]}\""
+    done
+    SCAN_ROOTS_TOML+=$'\n'"]"
+  fi
+
+  # ─── Interactive: Ask for subscription tier ──────────
+  echo ""
+  echo -e "${BLUE}  What Claude plan are you on?${NC}"
+  echo "    1) Pro ($20/month)"
+  echo "    2) Max 5x ($100/month)  [default]"
+  echo "    3) Max 20x ($200/month)"
+  read -p "  Choice [2]: " tier_choice
+  case "$tier_choice" in
+    1) TIER="pro" ;;
+    3) TIER="max20" ;;
+    *) TIER="max5" ;;
+  esac
+  ok "Tier: $TIER"
+
+  cat > "$CONFIG_FILE" << TOML
 # CreditForge Configuration
-# Edit scan_roots to add your project directories
 
 [night_mode]
 enabled = false
@@ -113,13 +166,13 @@ max_budget_per_task_usd = 0.50
 exclude_paths = []
 
 [scanner]
-scan_roots = []
+${SCAN_ROOTS_TOML}
 exclude_patterns = ["**/node_modules/**"]
 skip_npm_audit = false
 max_todos_per_project = 50
 
 [subscription]
-tier = "max5"
+tier = "${TIER}"
 
 [credits]
 window_reset_hour = 0
@@ -127,7 +180,6 @@ hard_stop_minutes_before = 30
 estimated_balance_usd_cents = 5000
 TOML
   ok "Config created at $CONFIG_FILE"
-  warn "Edit scan_roots in $CONFIG_FILE to add your projects"
 fi
 
 # ─── 5. Launchd Agents ──────────────────────────────────

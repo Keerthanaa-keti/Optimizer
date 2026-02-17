@@ -56,8 +56,11 @@ const DEFAULT_CONFIG: CreditForgeConfig = {
 };
 
 const CONFIG_PATHS = [
-  path.join(process.cwd(), 'creditforge.toml'),
   path.join(process.env.HOME ?? '~', '.creditforge', 'config.toml'),
+  ...(process.env.CREDITFORGE_ROOT
+    ? [path.join(process.env.CREDITFORGE_ROOT, 'creditforge.toml')]
+    : []),
+  path.join(process.cwd(), 'creditforge.toml'),
 ];
 
 /**
